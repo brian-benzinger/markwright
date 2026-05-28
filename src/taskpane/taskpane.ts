@@ -1,3 +1,5 @@
+import { markdownToOoxml } from "../convert";
+
 Office.onReady((info) => {
   if (info.host !== Office.HostType.Word) {
     show("unsupported");
@@ -30,13 +32,12 @@ async function onConvert(): Promise<void> {
     return;
   }
 
-  setStatus("Inserting…");
+  setStatus("Converting…");
   try {
+    const ooxml = markdownToOoxml(markdown);
     await Word.run(async (context) => {
-      // Milestone 1: trivial round-trip — drop the raw text at the selection.
-      // Milestone 2 will swap this for a markdown-it parse + OOXML fragment.
       const selection = context.document.getSelection();
-      selection.insertText(markdown, Word.InsertLocation.replace);
+      selection.insertOoxml(ooxml, Word.InsertLocation.replace);
       await context.sync();
     });
     setStatus("Done.");
