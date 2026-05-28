@@ -12,7 +12,9 @@ Office.onReady((info) => {
 });
 
 function show(id: string): void {
-  for (const el of document.querySelectorAll<HTMLElement>("body > [hidden], body > :not([hidden])")) {
+  for (const el of document.querySelectorAll<HTMLElement>(
+    "body > [hidden], body > :not([hidden])",
+  )) {
     el.hidden = el.id !== id;
   }
 }
@@ -25,7 +27,9 @@ function setStatus(message: string, kind: "info" | "error" = "info"): void {
 }
 
 async function onConvert(): Promise<void> {
-  const input = document.getElementById("markdown-input") as HTMLTextAreaElement;
+  const input = document.getElementById(
+    "markdown-input",
+  ) as HTMLTextAreaElement;
   const markdown = input.value;
   if (!markdown.trim()) {
     setStatus("Nothing to convert.", "error");
