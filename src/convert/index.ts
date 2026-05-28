@@ -70,20 +70,80 @@ function wrapFlatOpc(bodyXml: string): string {
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
     `<?mso-application progid="Word.Document"?>` +
     `<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">` +
+    rootRelsPart() +
+    documentRelsPart() +
+    documentPart(bodyXml) +
+    stylesPart() +
+    `</pkg:package>`
+  );
+}
+
+function rootRelsPart(): string {
+  return (
     `<pkg:part pkg:name="/_rels/.rels" pkg:contentType="application/vnd.openxmlformats-package.relationships+xml" pkg:padding="512">` +
     `<pkg:xmlData>` +
     `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
     `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
     `</Relationships>` +
     `</pkg:xmlData>` +
-    `</pkg:part>` +
+    `</pkg:part>`
+  );
+}
+
+function documentRelsPart(): string {
+  return (
+    `<pkg:part pkg:name="/word/_rels/document.xml.rels" pkg:contentType="application/vnd.openxmlformats-package.relationships+xml" pkg:padding="256">` +
+    `<pkg:xmlData>` +
+    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+    `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
+    `</Relationships>` +
+    `</pkg:xmlData>` +
+    `</pkg:part>`
+  );
+}
+
+function documentPart(bodyXml: string): string {
+  return (
     `<pkg:part pkg:name="/word/document.xml" pkg:contentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml">` +
     `<pkg:xmlData>` +
     `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
     `<w:body>${bodyXml}</w:body>` +
     `</w:document>` +
     `</pkg:xmlData>` +
-    `</pkg:part>` +
-    `</pkg:package>`
+    `</pkg:part>`
+  );
+}
+
+function stylesPart(): string {
+  // Declares the styleIds we reference in document.xml. Word merges these
+  // with the host document's styles by ID — for built-in IDs like
+  // "Heading1", the host's appearance wins, so we get the document's own
+  // heading styling rather than a Markwright default.
+  const headings = [1, 2, 3, 4, 5, 6]
+    .map(
+      (n) =>
+        `<w:style w:type="paragraph" w:styleId="Heading${n}">` +
+        `<w:name w:val="heading ${n}"/>` +
+        `<w:basedOn w:val="Normal"/>` +
+        `<w:next w:val="Normal"/>` +
+        `<w:uiPriority w:val="9"/>` +
+        `<w:qFormat/>` +
+        `</w:style>`
+    )
+    .join("");
+  const stylesXml =
+    `<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+    `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+    `<w:name w:val="Normal"/>` +
+    `<w:qFormat/>` +
+    `</w:style>` +
+    headings +
+    `</w:styles>`;
+  return (
+    `<pkg:part pkg:name="/word/styles.xml" pkg:contentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml">` +
+    `<pkg:xmlData>` +
+    stylesXml +
+    `</pkg:xmlData>` +
+    `</pkg:part>`
   );
 }
