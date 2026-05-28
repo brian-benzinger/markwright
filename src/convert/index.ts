@@ -52,8 +52,12 @@ function renderInline(token: Token): string {
 }
 
 function paragraph(textXml: string, styleId?: string): string {
-  const pPr = styleId ? `<w:pPr><w:pStyle w:val="${escapeAttr(styleId)}"/></w:pPr>` : "";
-  const run = textXml ? `<w:r><w:t xml:space="preserve">${textXml}</w:t></w:r>` : "";
+  const pPr = styleId
+    ? `<w:pPr><w:pStyle w:val="${escapeAttr(styleId)}"/></w:pPr>`
+    : "";
+  const run = textXml
+    ? `<w:r><w:t xml:space="preserve">${textXml}</w:t></w:r>`
+    : "";
   return `<w:p>${pPr}${run}</w:p>`;
 }
 
@@ -128,7 +132,7 @@ function stylesPart(): string {
         `<w:next w:val="Normal"/>` +
         `<w:uiPriority w:val="9"/>` +
         `<w:qFormat/>` +
-        `</w:style>`
+        `</w:style>`,
     )
     .join("");
   const stylesXml =

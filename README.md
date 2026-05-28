@@ -29,15 +29,29 @@ npm run start:web  # sideload into Word on the web
 On first run, `office-addin-dev-certs` will install a local CA so the dev
 server can serve HTTPS — Word refuses to load add-ins over plain HTTP.
 
+## Check before pushing
+
+```bash
+npm run typecheck   # tsc --noEmit
+npm run lint        # office-addin-lint (ESLint + Prettier)
+npm test            # vitest run
+npm run build       # production webpack build
+```
+
+All four also run in CI on every PR via `.github/workflows/ci.yml`.
+
 ## Project layout
 
 ```
 manifest.xml             XML add-in-only manifest (cross-platform)
 src/
+  convert/               Markdown → OOXML emitter (pure functions, unit-tested)
   taskpane/              Task pane UI (textarea + Convert button)
   commands/              Ribbon function-file (reserved for future actions)
   assets/                Manifest icons
+tests/                   Vitest suite for the converter
 webpack.config.js        Dual-entry build, copies manifest, serves over HTTPS
+eslint.config.mjs        Flat ESLint config extending office-addin-lint
 tsconfig.json
 ```
 
