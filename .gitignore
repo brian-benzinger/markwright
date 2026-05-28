@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.cache/
+*.log
+.DS_Store
+
+# Office add-in dev certs (managed by office-addin-dev-certs)
+.office-addin-dev-certs/
+
+# Editor
+.vscode/
+.idea/
+*.swp

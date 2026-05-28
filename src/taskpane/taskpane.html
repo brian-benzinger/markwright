@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Markwright</title>
+    <script src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
+    <link rel="stylesheet" href="taskpane.css" />
+  </head>
+  <body>
+    <main id="app" hidden>
+      <header>
+        <h1>Markwright</h1>
+        <p class="tagline">Paste markdown, click Convert.</p>
+      </header>
+
+      <section class="input">
+        <label for="markdown-input" class="sr-only">Markdown input</label>
+        <textarea
+          id="markdown-input"
+          spellcheck="false"
+          placeholder="# Paste your markdown here"
+        ></textarea>
+      </section>
+
+      <section class="actions">
+        <button id="convert" type="button">Convert</button>
+        <span id="status" role="status" aria-live="polite"></span>
+      </section>
+    </main>
+
+    <div id="unsupported" hidden>
+      <p>Markwright needs to run inside Microsoft Word.</p>
+    </div>
+  </body>
+</html>
