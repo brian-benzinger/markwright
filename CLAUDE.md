@@ -85,15 +85,14 @@ for `insertOoxml` again unless you're shipping tables/images/footnotes
 
 ## Outstanding M3 work
 
-- Thematic breaks (`---`)
 - Visual indent scaling for nested blockquotes (`quoteDepth > 1`). The
   Quote style sets its own left indent; layering an additive override
   for deeper levels needs a `load()` + `sync()` of the style's defaults
   before each Word.run iteration, which we didn't want to pay for the
   common single-depth case. Revisit if real docs need it.
-- Code blocks inside blockquotes: currently dropped. The
-  inside-blockquote branch only handles `paragraph_open` and
-  `heading_open`; `fence`/`code_block` tokens fall through to
+- Code blocks and thematic breaks inside blockquotes: currently
+  dropped. The inside-blockquote branch only handles `paragraph_open`
+  and `heading_open`; `fence`/`code_block`/`hr` tokens fall through to
   `continue`. Rare in practice — add when needed.
 
 Blockquote semantics are deliberately lossy: a heading or list item
@@ -111,6 +110,15 @@ Code-block rendering choices:
 - Word has no built-in "Code" paragraph style. `styleBuiltIn = normal`
   + `range.font.name = "Consolas"` is the simplest path that binds to
   a font the host actually ships.
+
+Thematic-break rendering:
+- `paragraph.insertHtml("<hr/>", Replace)` is the simplest reliable
+  path. Word interprets `<hr/>` as a bottom-bordered paragraph. The
+  borders API (`paragraph.borders.items`) would require iterating to
+  find Bottom and setting type/color/width by hand — more API surface
+  for no visual win.
+- `insertHtml` doesn't trip the OOXML-styles-clobbering problem the
+  way `insertOoxml` does; it's character/range-level, not package-level.
 
 After M3: tables (M4), style-mapping UI (M5),
 images/footnotes/math (M6), polish + distribution (M7).

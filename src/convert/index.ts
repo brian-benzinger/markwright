@@ -20,7 +20,8 @@ export type Block =
       listId: number;
       runs: Run[];
     }
-  | { kind: "codeBlock"; content: string; language?: string };
+  | { kind: "codeBlock"; content: string; language?: string }
+  | { kind: "thematicBreak" };
 
 const md = new MarkdownIt({ html: false, linkify: false, typographer: false });
 
@@ -84,6 +85,11 @@ export function parseMarkdown(source: string): Block[] {
       const language =
         t.type === "fence" && t.info.trim() ? t.info.trim() : undefined;
       blocks.push({ kind: "codeBlock", content: t.content, language });
+      continue;
+    }
+
+    if (t.type === "hr") {
+      blocks.push({ kind: "thematicBreak" });
       continue;
     }
 

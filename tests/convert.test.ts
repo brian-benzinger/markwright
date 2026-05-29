@@ -311,6 +311,33 @@ describe("parseMarkdown — lists", () => {
   });
 });
 
+describe("parseMarkdown — thematic breaks", () => {
+  it.each([
+    ["dashes", "---"],
+    ["asterisks", "***"],
+    ["underscores", "___"],
+  ])("parses %s as a thematic break", (_, source) => {
+    expect(parseMarkdown(source)).toEqual([{ kind: "thematicBreak" }]);
+  });
+
+  it("interleaves a thematic break between paragraphs", () => {
+    expect(parseMarkdown("before\n\n---\n\nafter")).toEqual([
+      { kind: "paragraph", runs: [{ text: "before" }] },
+      { kind: "thematicBreak" },
+      { kind: "paragraph", runs: [{ text: "after" }] },
+    ]);
+  });
+
+  it("drops a thematic break inside a blockquote", () => {
+    // Same lossy stance as code blocks inside blockquotes: rare in
+    // practice, and a quoted HR has no clean Word representation.
+    expect(parseMarkdown("> a\n>\n> ---\n>\n> b")).toEqual([
+      { kind: "paragraph", runs: [{ text: "a" }], quoteDepth: 1 },
+      { kind: "paragraph", runs: [{ text: "b" }], quoteDepth: 1 },
+    ]);
+  });
+});
+
 describe("parseMarkdown — code blocks", () => {
   it("parses a fenced code block", () => {
     expect(parseMarkdown("```\nhello\nworld\n```")).toEqual([

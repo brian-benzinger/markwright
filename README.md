@@ -27,10 +27,12 @@ marks and lists bind to the host document's own styles.
 - Fenced code blocks (` ``` `, with language tag captured) and 4-space
   indented code blocks — rendered as one monospaced (Consolas) Word
   paragraph with `\v` line breaks so the snippet stays one block
+- Thematic breaks (`---`, `***`, `___`) — rendered via
+  `paragraph.insertHtml("<hr/>", Replace)`, which Word interprets as a
+  bottom-bordered paragraph
 
-**Not yet** — thematic breaks (`---`), tables, task lists, images,
-footnotes, math, the style-mapping UI, and the OOXML fast path for bulk
-insertion.
+**Not yet** — tables, task lists, images, footnotes, math, the
+style-mapping UI, and the OOXML fast path for bulk insertion.
 
 ## Prerequisites
 
@@ -99,6 +101,7 @@ Block[]   ← stable seam between parsing and host integration
      │  │ heading    { level: 1..6, runs: Run[] }                  │
      │  │ listItem   { ordered, depth, listId, runs: Run[] }       │
      │  │ codeBlock  { content: string, language? }                │
+     │  │ thematicBreak  {}                                        │
      │  │ Run        { text, bold?, italic?, strike?, code?, link? }│
      │  └──────────────────────────────────────────────────────────┘
      ▼
@@ -107,6 +110,7 @@ Office.js (Word object model)
      range.font.bold / italic / strikeThrough / name
      range.hyperlink
      paragraph.startNewList() + setLevelBullet/Numbering + listItem.level
+     paragraph.insertHtml("<hr/>", Replace)  for thematic breaks
 ```
 
 The Block AST is the load-bearing abstraction. An earlier attempt (`pivot to
@@ -134,11 +138,11 @@ tsconfig.json
 
 ## Roadmap
 
-Remaining in **M3** (CommonMark coverage):
+Remaining in **M3** (CommonMark coverage — minor polish):
 
-- Thematic breaks (`---`)
 - Visual indent scaling for nested blockquotes (`quoteDepth > 1`)
-- Code blocks inside blockquotes (currently dropped — rare in practice)
+- Code blocks and thematic breaks inside blockquotes (currently dropped
+  — rare in practice)
 
 **M4** (GFM): tables (likely requires the Word Table API or revisiting OOXML),
 task lists, table-of-contents-friendly headings.
