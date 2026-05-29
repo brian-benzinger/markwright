@@ -72,11 +72,20 @@ for `insertOoxml` again unless you're shipping tables/images/footnotes
   `npm run typecheck && npm run lint && npm test && npm run build`.
   CI runs the same set.
 - `npm run lint:fix` cleans up Prettier nits and auto-fixable lint.
-- Lint config (`eslint.config.mjs`) extends `office-addin-lint` and
-  layers strict semantic rules on top: `no-explicit-any`,
-  `consistent-type-imports` (inline-type-imports style),
-  `no-non-null-assertion`, `no-inferrable-types`. Prettier still owns
-  every formatting decision — don't add format rules to ESLint.
+- Lint pipeline is direct: `eslint` (with `eslint-plugin-office-addins`
+  for Office.js-specific rules + `@typescript-eslint` recommended +
+  our strict additions: `no-explicit-any`, `consistent-type-imports`
+  inline-style, `no-non-null-assertion`, `no-inferrable-types`) and
+  Prettier with `.prettierrc.json`. The `office-addin-lint` wrapper
+  was removed for explicit version control. Don't add format rules to
+  ESLint — Prettier owns formatting.
+- Sourcemaps are dev-only (`devtool: dev ? "source-map" : false` in
+  `webpack.config.js`). Production builds ship code only.
+- No core-js polyfill. Word desktop (WebView2) and Word web both
+  speak ES2020+ which matches our tsconfig target.
+- No `npm start` auto-sideload — sideload `dist/manifest.xml` once via
+  Word's Insert > My Add-ins > Upload. Dropping `office-addin-debugging`
+  saved ~290 MB of Azure SDK transitives.
 - Coverage gate runs in `npm test` via `vitest run --coverage`. Only
   `src/convert/` is in scope — the Office.js applier can't execute
   under vitest because the `Word` global only exists in the host.
