@@ -1,109 +1,54 @@
 import { describe, it, expect } from "vitest";
-import { markdownToOoxml } from "../src/convert";
+import { parseMarkdown } from "../src/convert";
 
-describe("markdownToOoxml", () => {
-  describe("Flat OPC envelope", () => {
-    it("emits the package wrapper and mso processing instruction", () => {
-      const out = markdownToOoxml("hello");
-      expect(out.startsWith('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')).toBe(true);
-      expect(out).toContain('<?mso-application progid="Word.Document"?>');
-      expect(out).toContain("<pkg:package");
-      expect(out.endsWith("</pkg:package>")).toBe(true);
-    });
-
-    it("declares the four required parts", () => {
-      const out = markdownToOoxml("hello");
-      const parts = [
-        "/_rels/.rels",
-        "/word/_rels/document.xml.rels",
-        "/word/document.xml",
-        "/word/styles.xml",
-      ];
-      for (const p of parts) {
-        expect(out).toContain(`pkg:name="${p}"`);
-      }
-    });
-
-    it("links document.xml to styles.xml via a relationship", () => {
-      const out = markdownToOoxml("hello");
-      expect(out).toMatch(
-        /<Relationship[^>]+Type="[^"]*\/relationships\/styles"[^>]+Target="styles\.xml"/,
-      );
-    });
-
-    it("declares Normal as default and Heading1-6 in the styles part", () => {
-      const out = markdownToOoxml("");
-      expect(out).toMatch(/w:default="1" w:styleId="Normal"/);
-      for (const n of [1, 2, 3, 4, 5, 6]) {
-        expect(out).toContain(`w:styleId="Heading${n}"`);
-      }
-    });
+describe("parseMarkdown", () => {
+  it("returns an empty array for empty input", () => {
+    expect(parseMarkdown("")).toEqual([]);
   });
 
-  describe("paragraphs", () => {
-    it("renders a plain paragraph without a style reference", () => {
-      const out = markdownToOoxml("hello world");
-      expect(out).toContain(
-        '<w:p><w:r><w:t xml:space="preserve">hello world</w:t></w:r></w:p>',
-      );
-    });
-
-    it("emits an empty body for empty input", () => {
-      const out = markdownToOoxml("");
-      expect(out).toContain("<w:body></w:body>");
-    });
-
-    it("preserves multiple block-level elements in document order", () => {
-      const out = markdownToOoxml("# H\n\np1\n\n## S\n\np2");
-      const body = bodyOf(out);
-      const order = [
-        body.indexOf('w:val="Heading1"'),
-        body.indexOf(">H<"),
-        body.indexOf(">p1<"),
-        body.indexOf('w:val="Heading2"'),
-        body.indexOf(">S<"),
-        body.indexOf(">p2<"),
-      ];
-      expect(order.every((i) => i >= 0)).toBe(true);
-      for (let i = 1; i < order.length; i++) {
-        expect(order[i]).toBeGreaterThan(order[i - 1]);
-      }
-    });
+  it("returns an empty array for whitespace-only input", () => {
+    expect(parseMarkdown("   \n  \n")).toEqual([]);
   });
 
-  describe("headings", () => {
-    it.each([
-      ["#", "Heading1"],
-      ["##", "Heading2"],
-      ["###", "Heading3"],
-      ["####", "Heading4"],
-      ["#####", "Heading5"],
-      ["######", "Heading6"],
-    ])("maps %s to %s", (hashes, styleId) => {
-      const out = markdownToOoxml(`${hashes} title`);
-      expect(bodyOf(out)).toContain(
-        `<w:p><w:pPr><w:pStyle w:val="${styleId}"/></w:pPr><w:r><w:t xml:space="preserve">title</w:t></w:r></w:p>`,
-      );
-    });
+  it("parses a single paragraph", () => {
+    expect(parseMarkdown("hello world")).toEqual([
+      { kind: "paragraph", text: "hello world" },
+    ]);
   });
 
-  describe("escaping", () => {
-    it("escapes & < > in text content", () => {
-      const out = markdownToOoxml("a & b < c > d");
-      expect(bodyOf(out)).toContain("a &amp; b &lt; c &gt; d");
-    });
+  it.each([
+    [1, "# heading text"],
+    [2, "## heading text"],
+    [3, "### heading text"],
+    [4, "#### heading text"],
+    [5, "##### heading text"],
+    [6, "###### heading text"],
+  ])("parses heading level %i", (level, source) => {
+    expect(parseMarkdown(source)).toEqual([
+      { kind: "heading", level, text: "heading text" },
+    ]);
+  });
 
-    it("does not leave a naked ampersand in the body", () => {
-      const body = bodyOf(markdownToOoxml("Q&A and 1 < 2"));
-      // Every & in body text must be followed by an entity name.
-      const naked = body.match(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;)/g);
-      expect(naked).toBeNull();
-    });
+  it("preserves block order across mixed input", () => {
+    const out = parseMarkdown("# H\n\np1\n\n## S\n\np2");
+    expect(out).toEqual([
+      { kind: "heading", level: 1, text: "H" },
+      { kind: "paragraph", text: "p1" },
+      { kind: "heading", level: 2, text: "S" },
+      { kind: "paragraph", text: "p2" },
+    ]);
+  });
+
+  it("preserves XML special characters verbatim (Office.js handles escaping)", () => {
+    expect(parseMarkdown("a & b < c > d")).toEqual([
+      { kind: "paragraph", text: "a & b < c > d" },
+    ]);
+  });
+
+  it("ignores block types not yet supported in M3 (lists, code, blockquote)", () => {
+    // Strict pre-M3 scope: lists/code/blockquote are silently skipped for now.
+    // Adding coverage for these is the next milestone and will update this test.
+    const out = parseMarkdown("- one\n- two\n\n> quote\n\n```\ncode\n```");
+    expect(out).toEqual([]);
   });
 });
-
-function bodyOf(ooxml: string): string {
-  const m = ooxml.match(/<w:body>([\s\S]*)<\/w:body>/);
-  if (!m) throw new Error("no body found in OOXML");
-  return m[1];
-}
