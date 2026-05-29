@@ -65,15 +65,43 @@ npm run dev-server                   # serves the bundle on https://localhost:30
 ```
 
 Word refuses to load add-ins over plain HTTP, hence the cert install. Then
-sideload the manifest **once** per host:
+sideload the manifest **once** per host. The path differs per surface:
 
-- **Word desktop:** *Insert → My Add-ins → Manage My Add-ins → Upload My Add-in*
-  → pick `dist/manifest.xml`.
-- **Word web:** *Home → Add-ins → More Add-ins → My Add-ins → Upload My Add-in*
-  → pick `dist/manifest.xml`.
+### Word desktop (Windows)
 
-After the one-time sideload, edits hot-reload through the dev server — just
-refresh the task pane.
+There's no "Upload My Add-in" button on desktop — sideload goes through a
+trusted shared-folder catalog:
+
+1. Create a folder somewhere (e.g. `C:\Users\<you>\WordAddins`) and copy
+   `dist/manifest.xml` into it.
+2. In Word, *File → Options → Trust Center → Trust Center Settings →
+   Trusted Add-in Catalogs.*
+3. Paste the folder path in **Catalog Url**, click **Add Catalog**, then
+   check **Show in Menu** for that row. Click OK and restart Word.
+4. *Insert → Add-ins → Shared Folder* tab → Markwright → **Add**.
+
+### Word desktop (Mac)
+
+Drop `dist/manifest.xml` into
+`~/Library/Containers/com.microsoft.Word/Data/Documents/wef/` (create the
+`wef` folder if it doesn't exist, lowercase). Restart Word and the add-in
+appears under *Insert → My Add-ins*.
+
+### Word web
+
+Available only on **work / school M365 accounts** (consumer Microsoft
+accounts have sideload disabled). The path is *Home → Add-ins → More
+Add-ins → MY ADD-INS tab → Upload My Add-in* (link at the bottom of the
+dialog) → pick `dist/manifest.xml`. If your tenant admin has blocked
+custom add-ins, the upload link is hidden.
+
+### After sideload
+
+Edits hot-reload through the dev server — just refresh the task pane.
+When you change icon assets or any other ribbon-cached resource, bump
+`<Version>` in `manifest.xml` and re-add the add-in. Word desktop caches
+icons by manifest ID + version under `%LOCALAPPDATA%\Microsoft\Office\
+16.0\Wef\`; without a version bump it'll keep showing the old icon.
 
 > Earlier versions of this repo used `office-addin-debugging` for one-command
 > sideloading; we dropped it because its `@microsoft/m365agentstoolkit-cli`

@@ -88,13 +88,22 @@ function applyBlock(paragraph: Word.Paragraph, block: Block, state: RenderState)
     return;
   }
   if (block.kind === "listItem") {
+    // Order matters: set the paragraph style FIRST so the paragraph is
+    // already shaped like a list item before we attach it. Then create
+    // (or extend) the list, configure the level's bullet/numbering,
+    // and only set listItem.level when it actually differs from 0 — at
+    // depth 0 the level is the default, and setting it on a brand-new
+    // list item can race with startNewList's async attachment and
+    // throw ItemNotFound.
+    paragraph.styleBuiltIn = Word.BuiltInStyleName.listParagraph;
     if (state.currentList === null || state.currentListId !== block.listId) {
       state.currentList = paragraph.startNewList();
       state.currentListId = block.listId;
     }
     configureListLevel(state, block.depth, block.ordered);
-    paragraph.styleBuiltIn = Word.BuiltInStyleName.listParagraph;
-    paragraph.listItem.level = block.depth;
+    if (block.depth > 0) {
+      paragraph.listItem.level = block.depth;
+    }
     if (block.checked !== undefined) {
       // The list bullet still renders alongside the checkbox. Swapping
       // to a custom level bullet via setLevelBullet(custom, ...) would
