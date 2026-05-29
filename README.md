@@ -171,9 +171,9 @@ use. The current footprint:
 
 | | size |
 | --- | ---: |
-| `node_modules` | ~237 MB |
-| `dist/` (production, no sourcemaps) | ~180 KB |
-| `dist/` (development, sourcemaps on) | ~912 KB |
+| `node_modules` | ~278 MB |
+| `dist/` (production, no sourcemaps) | ~184 KB |
+| `dist/` (development, sourcemaps on) | ~936 KB |
 
 Runtime deps are just `markdown-it`. Dev tooling is `vitest`, `webpack`,
 `typescript`, `eslint` + plugins, and `prettier` — picked individually
