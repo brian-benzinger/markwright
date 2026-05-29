@@ -109,7 +109,7 @@ verify it via sideload, not vitest.
 
 | metric     | threshold |
 | ---------- | --------: |
-| lines      |        90 |
+| lines      |        95 |
 | statements |        90 |
 | functions  |       100 |
 | branches   |        90 |
