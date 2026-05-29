@@ -112,7 +112,7 @@ for `insertOoxml` again unless you're shipping tables/images/footnotes
 - Coverage gate runs in `npm test` via `vitest run --coverage`. Only
   `src/convert/` is in scope — the Office.js applier can't execute
   under vitest because the `Word` global only exists in the host.
-  Thresholds in `vitest.config.ts`: lines 90, statements 90,
+  Thresholds in `vitest.config.ts`: lines 95, statements 90,
   functions 100, branches 90.
 
 ## Outstanding work in M3 / M4
