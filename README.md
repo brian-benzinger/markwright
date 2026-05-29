@@ -115,8 +115,14 @@ npm run typecheck   # tsc --noEmit
 npm run lint        # eslint . && prettier --check ...
 npm run lint:fix    # auto-fix formatting and trivially-fixable lint
 npm test            # vitest run --coverage
-npm run build       # production webpack build (no sourcemaps)
+npm run build       # production webpack build (no sourcemaps, size-gated)
 ```
+
+The production build enforces a **moderate size budget** via webpack's
+`performance.hints = "error"`: each JS asset must stay under **200 KB**,
+each entrypoint under **250 KB**. Current `taskpane.js` is ~132 KB, so
+there's ~35% headroom — enough for a small feature without re-baselining.
+The dev build is exempt (sourcemaps push it past the limit by design).
 
 All four (typecheck, lint, test, build) also run in CI on every PR via
 `.github/workflows/ci.yml`. The lint config (`eslint.config.mjs`) layers
