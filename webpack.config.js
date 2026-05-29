@@ -80,5 +80,19 @@ module.exports = async (env, options) => {
       },
       port: process.env.npm_package_config_dev_server_port || 3000,
     },
+    // Production-only size budget. Fails the build (and therefore CI,
+    // since `npm run build` is a gate) when shipped JS exceeds the
+    // moderate thresholds — current taskpane.js is ~130 KB, so 200 KB
+    // per asset / 250 KB per entrypoint leaves headroom for a feature
+    // or two before the alarm goes off. Dev mode is exempt: sourcemaps
+    // legitimately push files well past these numbers.
+    performance: dev
+      ? false
+      : {
+          hints: "error",
+          maxAssetSize: 200 * 1024,
+          maxEntrypointSize: 250 * 1024,
+          assetFilter: (name) => name.endsWith(".js"),
+        },
   };
 };
