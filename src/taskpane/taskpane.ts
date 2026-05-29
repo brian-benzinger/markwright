@@ -103,6 +103,14 @@ function applyBlock(
   block: Block,
   state: ListState,
 ): void {
+  if (block.kind === "thematicBreak") {
+    // Word interprets <hr/> as a bottom-bordered paragraph — the
+    // conventional thematic-break representation. insertHtml on the
+    // paragraph itself (Replace) avoids any styles-clobbering surprise
+    // we hit with insertOoxml earlier.
+    paragraph.insertHtml("<hr/>", Word.InsertLocation.replace);
+    return;
+  }
   if (block.kind === "codeBlock") {
     paragraph.styleBuiltIn = Word.BuiltInStyleName.normal;
     // markdown-it always emits a trailing newline; drop it. Remaining
