@@ -311,24 +311,71 @@ describe("parseMarkdown — lists", () => {
   });
 });
 
-describe("parseMarkdown — blockquotes (M3 placeholder)", () => {
-  // Blockquotes aren't implemented yet; until they are, their contents
-  // are dropped rather than emitted as bare paragraphs that lose the
-  // quote semantics. These tests pin that behavior so the gap is visible.
-  it("suppresses contents nested inside a blockquote", () => {
-    expect(parseMarkdown("> quoted line")).toEqual([]);
+describe("parseMarkdown — blockquotes", () => {
+  it("emits a single-line blockquote as a quoted paragraph", () => {
+    expect(parseMarkdown("> quoted line")).toEqual([
+      { kind: "paragraph", runs: [{ text: "quoted line" }], quoteDepth: 1 },
+    ]);
   });
 
-  it("suppresses blockquote contents but keeps surrounding blocks in order", () => {
+  it("collapses a multi-line blockquote into one paragraph with a soft break", () => {
+    // A bare newline inside a blockquote is a softbreak, not a paragraph
+    // break — so `> a\n> b` is one quoted paragraph with " " between.
+    expect(parseMarkdown("> a\n> b")).toEqual([
+      { kind: "paragraph", runs: [{ text: "a b" }], quoteDepth: 1 },
+    ]);
+  });
+
+  it("emits one paragraph per blank-line-separated chunk inside the blockquote", () => {
+    expect(parseMarkdown("> a\n>\n> b")).toEqual([
+      { kind: "paragraph", runs: [{ text: "a" }], quoteDepth: 1 },
+      { kind: "paragraph", runs: [{ text: "b" }], quoteDepth: 1 },
+    ]);
+  });
+
+  it("preserves surrounding blocks in order", () => {
     expect(parseMarkdown("before\n\n> quoted\n\nafter")).toEqual([
       { kind: "paragraph", runs: [{ text: "before" }] },
+      { kind: "paragraph", runs: [{ text: "quoted" }], quoteDepth: 1 },
       { kind: "paragraph", runs: [{ text: "after" }] },
     ]);
   });
 
-  it("suppresses contents of nested blockquotes", () => {
-    expect(parseMarkdown("> outer\n>\n> > inner\n\nresumed")).toEqual([
-      { kind: "paragraph", runs: [{ text: "resumed" }] },
+  it("tracks nested quote depth", () => {
+    expect(parseMarkdown("> outer\n>\n> > inner")).toEqual([
+      { kind: "paragraph", runs: [{ text: "outer" }], quoteDepth: 1 },
+      { kind: "paragraph", runs: [{ text: "inner" }], quoteDepth: 2 },
+    ]);
+  });
+
+  it("downgrades a heading inside a blockquote to a quoted paragraph (lossy)", () => {
+    expect(parseMarkdown("> # not really a heading")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "not really a heading" }],
+        quoteDepth: 1,
+      },
+    ]);
+  });
+
+  it("preserves inline marks inside a blockquote", () => {
+    expect(parseMarkdown("> a **bold** quote")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          { text: "a " },
+          { text: "bold", bold: true },
+          { text: " quote" },
+        ],
+        quoteDepth: 1,
+      },
+    ]);
+  });
+
+  it("flattens list items inside a blockquote to quoted paragraphs (lossy)", () => {
+    expect(parseMarkdown("> - one\n> - two")).toEqual([
+      { kind: "paragraph", runs: [{ text: "one" }], quoteDepth: 1 },
+      { kind: "paragraph", runs: [{ text: "two" }], quoteDepth: 1 },
     ]);
   });
 });

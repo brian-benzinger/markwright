@@ -111,6 +111,12 @@ function applyBlock(
     configureListLevel(state, block.depth, block.ordered);
     paragraph.styleBuiltIn = Word.BuiltInStyleName.listParagraph;
     paragraph.listItem.level = block.depth;
+  } else if (block.kind === "paragraph" && block.quoteDepth) {
+    paragraph.styleBuiltIn = Word.BuiltInStyleName.quote;
+    // TODO: visually scale indent for quoteDepth > 1. Word's Quote style
+    // sets its own left indent; layering an additive override needs a
+    // load+sync of the style's defaults first, which we'd rather not pay
+    // for the common single-depth case.
   } else {
     paragraph.styleBuiltIn =
       block.kind === "heading"
