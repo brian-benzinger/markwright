@@ -85,9 +85,20 @@ for `insertOoxml` again unless you're shipping tables/images/footnotes
 
 ## Outstanding M3 work
 
-- Blockquotes (parser currently suppresses contents)
 - Fenced and indented code blocks
 - Thematic breaks (`---`)
+- Visual indent scaling for nested blockquotes (`quoteDepth > 1`). The
+  Quote style sets its own left indent; layering an additive override
+  for deeper levels needs a `load()` + `sync()` of the style's defaults
+  before each Word.run iteration, which we didn't want to pay for the
+  common single-depth case. Revisit if real docs need it.
+
+Blockquote semantics are deliberately lossy: a heading or list item
+inside a blockquote becomes a flat quote-styled paragraph. This keeps
+the AST simple and matches conventional Markdown rendering. If a real
+use case turns up that needs styled headings inside quotes, the AST
+seam can grow a `quoteDepth?` field on `heading` and `listItem` too —
+but don't preempt that.
 
 After M3: tables (M4), style-mapping UI (M5),
 images/footnotes/math (M6), polish + distribution (M7).

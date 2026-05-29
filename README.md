@@ -22,10 +22,12 @@ marks and lists bind to the host document's own styles.
   (two trailing spaces), backslash escapes
 - Bullet lists, ordered lists, mixed nested lists (continuous numbering per
   Markdown list scope)
+- Blockquotes (bind to Word's "Quote" style; nesting tracked in the AST as
+  `quoteDepth` though depth-2+ doesn't visually scale indent yet)
 
-**Not yet** — blockquotes, fenced/indented code blocks, thematic breaks
-(`---`), tables, task lists, images, footnotes, math, the style-mapping UI,
-and the OOXML fast path for bulk insertion.
+**Not yet** — fenced/indented code blocks, thematic breaks (`---`), tables,
+task lists, images, footnotes, math, the style-mapping UI, and the OOXML
+fast path for bulk insertion.
 
 ## Prerequisites
 
@@ -90,14 +92,14 @@ markdown-it tokens
      ▼
 Block[]   ← stable seam between parsing and host integration
      │  ┌──────────────────────────────────────────────────────────┐
-     │  │ paragraph  { runs: Run[] }                               │
+     │  │ paragraph  { runs: Run[], quoteDepth? }                  │
      │  │ heading    { level: 1..6, runs: Run[] }                  │
      │  │ listItem   { ordered, depth, listId, runs: Run[] }       │
      │  │ Run        { text, bold?, italic?, strike?, code?, link? }│
      │  └──────────────────────────────────────────────────────────┘
      ▼
 Office.js (Word object model)
-     paragraph.styleBuiltIn = Heading1..6 | Normal | ListParagraph
+     paragraph.styleBuiltIn = Heading1..6 | Normal | ListParagraph | Quote
      range.font.bold / italic / strikeThrough / name
      range.hyperlink
      paragraph.startNewList() + setLevelBullet/Numbering + listItem.level
@@ -130,9 +132,9 @@ tsconfig.json
 
 Remaining in **M3** (CommonMark coverage):
 
-- Blockquotes
 - Fenced and indented code blocks
 - Thematic breaks (`---`)
+- Visual indent scaling for nested blockquotes (`quoteDepth > 1`)
 
 **M4** (GFM): tables (likely requires the Word Table API or revisiting OOXML),
 task lists, table-of-contents-friendly headings.

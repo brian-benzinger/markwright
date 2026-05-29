@@ -11,7 +11,7 @@ export type Run = {
 };
 
 export type Block =
-  | { kind: "paragraph"; runs: Run[] }
+  | { kind: "paragraph"; runs: Run[]; quoteDepth?: number }
   | { kind: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; runs: Run[] }
   | {
       kind: "listItem";
@@ -26,8 +26,10 @@ const md = new MarkdownIt({ html: false, linkify: false, typographer: false });
 export function parseMarkdown(source: string): Block[] {
   const tokens = md.parse(source, {});
   const blocks: Block[] = [];
-  // Blockquotes aren't supported yet; suppress their contents rather than
-  // emitting bare paragraphs that would lose the quote semantics.
+  // Tracks current blockquote nesting depth; > 0 turns inner blocks into
+  // quote-styled paragraphs (lossy for headings and list items — they
+  // collapse to flat quoted paragraphs, which is the conventional
+  // rendering and keeps the AST simple).
   let blockquoteDepth = 0;
   // listStack tracks ordered-ness per nesting level; listId is a synthetic
   // counter that groups every item in one top-level Markdown list scope
@@ -48,7 +50,20 @@ export function parseMarkdown(source: string): Block[] {
       blockquoteDepth--;
       continue;
     }
-    if (blockquoteDepth > 0) continue;
+    if (blockquoteDepth > 0) {
+      // Inside a blockquote: emit any paragraph- or heading-bearing
+      // content as a quote-styled paragraph at the current depth. List
+      // and other container tokens are skipped so list semantics don't
+      // collide with quote styling.
+      if (t.type === "heading_open" || t.type === "paragraph_open") {
+        const runs = flattenInline(tokens[i + 1]);
+        i += 2;
+        if (runs.length > 0) {
+          blocks.push({ kind: "paragraph", runs, quoteDepth: blockquoteDepth });
+        }
+      }
+      continue;
+    }
 
     if (t.type === "bullet_list_open" || t.type === "ordered_list_open") {
       if (listStack.length === 0) {
