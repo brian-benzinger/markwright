@@ -650,3 +650,117 @@ describe("parseMarkdown — tables", () => {
     expect(out.some((b) => b.kind === "table")).toBe(false);
   });
 });
+
+describe("parseMarkdown — images", () => {
+  it("parses a standalone image", () => {
+    expect(parseMarkdown("![logo](https://x.com/a.png)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ src: "https://x.com/a.png", alt: "logo" }],
+      },
+    ]);
+  });
+
+  it("captures the title attribute when present", () => {
+    expect(parseMarkdown('![logo](https://x/a.png "tooltip")')).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          {
+            src: "https://x/a.png",
+            alt: "logo",
+            title: "tooltip",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("preserves an empty alt for purely decorative images", () => {
+    expect(parseMarkdown("![](https://x/a.png)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ src: "https://x/a.png", alt: "" }],
+      },
+    ]);
+  });
+
+  it("places images inline with surrounding text", () => {
+    expect(parseMarkdown("see ![logo](https://x/a.png) here")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "see " }, { src: "https://x/a.png", alt: "logo" }, { text: " here" }],
+      },
+    ]);
+  });
+
+  it("does not merge text runs across an image boundary", () => {
+    // The image breaks the adjacency, so the trailing text stays its own
+    // run even though it has the same formatting as the leading text.
+    const out = parseMarkdown("a ![](u) b");
+    expect(out).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "a " }, { src: "u", alt: "" }, { text: " b" }],
+      },
+    ]);
+  });
+
+  it("works inside list items", () => {
+    expect(parseMarkdown("- ![logo](https://x/a.png)")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ src: "https://x/a.png", alt: "logo" }],
+      },
+    ]);
+  });
+
+  it("resolves a reference-style image like its inline counterpart", () => {
+    const src = "![logo][ref]\n\n[ref]: https://x/a.png";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ src: "https://x/a.png", alt: "logo" }],
+      },
+    ]);
+  });
+});
+
+describe("parseMarkdown — flavors of basic syntax", () => {
+  it("handles Setext H1 (underlined with =) like ATX #", () => {
+    expect(parseMarkdown("Hello\n=====")).toEqual([
+      { kind: "heading", level: 1, runs: [{ text: "Hello" }] },
+    ]);
+  });
+
+  it("handles Setext H2 (underlined with -) like ATX ##", () => {
+    expect(parseMarkdown("Hello\n-----")).toEqual([
+      { kind: "heading", level: 2, runs: [{ text: "Hello" }] },
+    ]);
+  });
+
+  it("resolves reference-style links", () => {
+    const src = "see [docs][1]\n\n[1]: https://example.com";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "see " }, { text: "docs", link: "https://example.com" }],
+      },
+    ]);
+  });
+
+  it("decodes named HTML entities", () => {
+    expect(parseMarkdown("rights &copy; 2026")).toEqual([
+      { kind: "paragraph", runs: [{ text: "rights © 2026" }] },
+    ]);
+  });
+
+  it("decodes numeric HTML character references", () => {
+    expect(parseMarkdown("snowman &#9731;")).toEqual([
+      { kind: "paragraph", runs: [{ text: "snowman ☃" }] },
+    ]);
+  });
+});
