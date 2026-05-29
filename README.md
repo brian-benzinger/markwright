@@ -68,17 +68,21 @@ refresh the task pane.
 
 ```bash
 npm run typecheck   # tsc --noEmit
-npm run lint        # office-addin-lint (ESLint + Prettier)
+npm run lint        # eslint . && prettier --check ...
 npm run lint:fix    # auto-fix formatting and trivially-fixable lint
 npm test            # vitest run --coverage
-npm run build       # production webpack build
+npm run build       # production webpack build (no sourcemaps)
 ```
 
 All four (typecheck, lint, test, build) also run in CI on every PR via
-`.github/workflows/ci.yml`. The lint config extends `office-addin-lint`
-and additionally enforces `no-explicit-any`, `consistent-type-imports`,
-`no-non-null-assertion`, and `no-inferrable-types` (`eslint.config.mjs`)
-— Prettier remains the only source of formatting rules.
+`.github/workflows/ci.yml`. The lint config (`eslint.config.mjs`) layers
+the `eslint-plugin-office-addins` rules — which catch real Office.js
+footguns like `context.sync()` in loops and reading a property before
+calling `load()` — over `@typescript-eslint`'s recommended rules, plus
+the project's stricter additions (`no-explicit-any`,
+`consistent-type-imports`, `no-non-null-assertion`,
+`no-inferrable-types`). Prettier owns formatting; settings live in
+`.prettierrc.json`.
 
 ### Coverage
 
@@ -131,6 +135,25 @@ authoritative definitions of Heading1–6 and silently flattened the output.
 The object-model path binds to the host document's real styles instead. OOXML
 emission stays in the design as a future option for bulk content (tables,
 images, footnotes), implemented as another emitter over the same `Block[]`.
+
+## Dependency footprint
+
+Markwright deliberately keeps its install thin so cloud containers, CI
+cold runs, and contributor laptops aren't billed for tooling we don't
+use. The current footprint:
+
+| | size |
+| --- | ---: |
+| `node_modules` | ~237 MB |
+| `dist/` (production, no sourcemaps) | ~180 KB |
+| `dist/` (development, sourcemaps on) | ~912 KB |
+
+Runtime deps are just `markdown-it`. Dev tooling is `vitest`, `webpack`,
+`typescript`, `eslint` + plugins, and `prettier` — picked individually
+rather than via `office-addin-lint` or `office-addin-debugging`
+wrappers, both of which dragged in large transitive trees (the
+debugging wrapper pulled ~290 MB of Azure ARM SDK via its
+`@microsoft/m365agentstoolkit-cli` peer) without proportional value.
 
 ## Project layout
 
