@@ -10,25 +10,35 @@ export type Run = {
   link?: string;
 };
 
+export type Image = {
+  src: string;
+  alt: string;
+  title?: string;
+};
+
+// Inline content within a block. Runs carry text + marks; images are
+// atomic. Discriminated structurally — only Image carries `src`.
+export type Inline = Run | Image;
+
 export type Alignment = "left" | "center" | "right";
 
 export type Block =
-  | { kind: "paragraph"; runs: Run[]; quoteDepth?: number }
-  | { kind: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; runs: Run[] }
+  | { kind: "paragraph"; runs: Inline[]; quoteDepth?: number }
+  | { kind: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; runs: Inline[] }
   | {
       kind: "listItem";
       ordered: boolean;
       depth: number;
       listId: number;
-      runs: Run[];
+      runs: Inline[];
       checked?: boolean;
     }
   | { kind: "codeBlock"; content: string; language?: string }
   | { kind: "thematicBreak" }
   | {
       kind: "table";
-      header: Run[][];
-      rows: Run[][][];
+      header: Inline[][];
+      rows: Inline[][][];
       alignments: Alignment[];
     };
 
@@ -182,11 +192,11 @@ export function parseMarkdown(source: string): Block[] {
 }
 
 type TableContext = {
-  header: Run[][];
-  rows: Run[][][];
+  header: Inline[][];
+  rows: Inline[][][];
   alignments: Alignment[];
   inHeader: boolean;
-  currentRow: Run[][];
+  currentRow: Inline[][];
 };
 
 function cellAlignment(token: Token): Alignment {
@@ -201,7 +211,7 @@ function cellAlignment(token: Token): Alignment {
 function listItemBlock(
   stack: Array<{ ordered: boolean }>,
   listId: number,
-  runs: Run[],
+  runs: Inline[],
   checked: boolean | undefined
 ): Block {
   return {
@@ -235,9 +245,9 @@ type InlineState = {
   link: string | undefined;
 };
 
-function flattenInline(token: Token | undefined): Run[] {
+function flattenInline(token: Token | undefined): Inline[] {
   if (!token || token.type !== "inline") return [];
-  const out: Run[] = [];
+  const out: Inline[] = [];
   const s: InlineState = {
     boldDepth: 0,
     italicDepth: 0,
@@ -284,6 +294,18 @@ function flattenInline(token: Token | undefined): Run[] {
         // U+000B is Word's in-paragraph line break.
         pushRun(out, makeRun("\v", s));
         break;
+      case "image": {
+        // Atomic — markdown-it's image token carries the src as an attr
+        // and the alt text in `content`. Title is optional.
+        const image: Image = {
+          src: child.attrGet("src") ?? "",
+          alt: child.content,
+        };
+        const title = child.attrGet("title");
+        if (title) image.title = title;
+        out.push(image);
+        break;
+      }
     }
   }
   return out;
@@ -299,9 +321,9 @@ function makeRun(text: string, s: InlineState, code = false): Run {
   return run;
 }
 
-function pushRun(out: Run[], run: Run): void {
+function pushRun(out: Inline[], run: Run): void {
   const prev = out[out.length - 1];
-  if (prev && sameFormat(prev, run)) {
+  if (prev && !("src" in prev) && sameFormat(prev, run)) {
     prev.text += run.text;
   } else {
     out.push(run);

@@ -13,13 +13,16 @@ writes it into the document via the Word object model (`paragraph.styleBuiltIn`,
 `range.font.*`, `paragraph.startNewList()`), so headings, paragraphs, inline
 marks and lists bind to the host document's own styles.
 
-**Supported today**
+**Basic Markdown (CommonMark + GFM) is fully supported.**
 
 - Paragraphs
-- Headings `#` through `######` (bind to Word's built-in Heading 1–6 styles)
+- Headings (ATX `#`..`######` *and* Setext `===` / `---`) — bind to Word's
+  built-in Heading 1–6 styles
 - Inline: `**bold**`, `*italic*` / `_italic_`, `~~strike~~`, `` `inline code` ``
-  (monospace font), `[links](url)`, autolinks `<https://…>`, hard line breaks
-  (two trailing spaces), backslash escapes
+  (monospace font), `[label](url)`, autolinks `<https://…>`, bare-URL
+  autolinks, reference-style links (`[label][ref]` + `[ref]: url`), hard
+  line breaks (two trailing spaces), backslash escapes, named and numeric
+  HTML entities
 - Bullet lists, ordered lists, mixed nested lists (continuous numbering per
   Markdown list scope)
 - Blockquotes (bind to Word's "Quote" style; nesting tracked in the AST as
@@ -32,15 +35,17 @@ marks and lists bind to the host document's own styles.
   bottom-bordered paragraph
 - GFM **task lists** (`- [ ]`, `- [x]`, `- [X]`, including in ordered
   lists) — rendered with `☐` / `☑` prepended to the run text
-- GFM **bare-URL autolinks** (`https://x` in flowing text becomes a
-  hyperlink)
 - GFM **tables** with per-column alignment (`:---`, `:---:`, `---:`),
   inline marks inside cells, and bold header rows — rendered via
   `paragraph.insertTable` against an empty anchor that we reuse for
   the next block
+- **Images** (`![alt](src)`, reference-style `![alt][ref]`, optional
+  `"title"`) — rendered as `<img>` via `paragraph.insertHtml`, so Word's
+  HTML paste pipeline fetches the URL. Data URIs work directly; if the
+  fetch fails Word falls back to the alt text (browser `<img>` behavior)
 
-**Not yet** — images, footnotes, math, the style-mapping UI, and the
-OOXML fast path for bulk insertion.
+**Not yet** — footnotes, math, the style-mapping UI, and the OOXML fast
+path for bulk insertion.
 
 ## Prerequisites
 
@@ -120,14 +125,16 @@ markdown-it tokens
      ▼
 Block[]   ← stable seam between parsing and host integration
      │  ┌──────────────────────────────────────────────────────────┐
-     │  │ paragraph  { runs: Run[], quoteDepth? }                  │
-     │  │ heading    { level: 1..6, runs: Run[] }                  │
+     │  │ paragraph  { runs: Inline[], quoteDepth? }               │
+     │  │ heading    { level: 1..6, runs: Inline[] }               │
      │  │ listItem   { ordered, depth, listId, runs, checked? }   │
      │  │ codeBlock  { content: string, language? }                │
      │  │ thematicBreak  {}                                        │
-     │  │ table      { header: Run[][], rows: Run[][][],           │
+     │  │ table      { header: Inline[][], rows: Inline[][][],     │
      │  │              alignments: Alignment[] }                   │
+     │  │ Inline = Run | Image                                     │
      │  │ Run        { text, bold?, italic?, strike?, code?, link? }│
+     │  │ Image      { src, alt, title? }                          │
      │  └──────────────────────────────────────────────────────────┘
      ▼
 Office.js (Word object model)
@@ -136,6 +143,7 @@ Office.js (Word object model)
      range.hyperlink
      paragraph.startNewList() + setLevelBullet/Numbering + listItem.level
      paragraph.insertHtml("<hr/>", Replace)  for thematic breaks
+     paragraph.insertHtml('<img src="…" alt="…"/>')  for images
      paragraph.insertTable(rows, cols, Before) + cell.body + horizontalAlignment
 ```
 

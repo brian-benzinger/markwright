@@ -1,4 +1,4 @@
-import { type Alignment, type Block, type Run } from "../convert";
+import { type Alignment, type Block, type Image, type Inline, type Run } from "../convert";
 
 /**
  * Walks `Block[]` and writes the content into the active Word document
@@ -112,8 +112,8 @@ function applyBlock(paragraph: Word.Paragraph, block: Block, state: RenderState)
     paragraph.styleBuiltIn =
       block.kind === "heading" ? headingStyle(block.level) : Word.BuiltInStyleName.normal;
   }
-  for (const run of block.runs) {
-    applyRun(paragraph, run);
+  for (const inline of block.runs) {
+    applyInline(paragraph, inline);
   }
 }
 
@@ -145,15 +145,19 @@ function applyTable(
 
 function applyCell(
   cell: Word.TableCell,
-  runs: Run[],
+  inlines: Inline[],
   alignment: Alignment,
   isHeader: boolean
 ): void {
   cell.horizontalAlignment = alignToWord(alignment);
   const cellPara = cell.body.paragraphs.getFirst();
-  for (const run of runs) {
-    const range = cellPara.insertText(run.text, Word.InsertLocation.end);
-    formatRange(range, run, isHeader);
+  for (const inline of inlines) {
+    if ("src" in inline) {
+      applyImage(cellPara, inline);
+    } else {
+      const range = cellPara.insertText(inline.text, Word.InsertLocation.end);
+      formatRange(range, inline, isHeader);
+    }
   }
 }
 
@@ -184,9 +188,36 @@ function configureListLevel(state: RenderState, depth: number, ordered: boolean)
   }
 }
 
+function applyInline(paragraph: Word.Paragraph, inline: Inline): void {
+  if ("src" in inline) {
+    applyImage(paragraph, inline);
+  } else {
+    applyRun(paragraph, inline);
+  }
+}
+
 function applyRun(paragraph: Word.Paragraph, run: Run): void {
   const range = paragraph.insertText(run.text, Word.InsertLocation.end);
   formatRange(range, run, false);
+}
+
+function applyImage(paragraph: Word.Paragraph, image: Image): void {
+  // Word's HTML paste pipeline fetches the URL and embeds the image.
+  // If the fetch fails (offline / CORS / 404) Word falls back to the
+  // alt text, which matches a browser's <img> behavior.
+  const html =
+    `<img src="${escapeHtml(image.src)}" alt="${escapeHtml(image.alt)}"` +
+    (image.title ? ` title="${escapeHtml(image.title)}"` : "") +
+    " />";
+  paragraph.insertHtml(html, Word.InsertLocation.end);
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function formatRange(range: Word.Range, run: Run, forceBold: boolean): void {

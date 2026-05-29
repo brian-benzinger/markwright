@@ -23,6 +23,12 @@ A few patterns that recur in the applier:
   (bold/italic/strike depths + current link). `makeRun(text, state, code?)`
   is the only constructor — if you find yourself passing 4+ positional
   flags, rebuild it on top of the struct.
+- Inline content is `Inline[] = (Run | Image)[]`. The field name is
+  `runs` for backward compatibility but the type widened when images
+  shipped. The applier discriminates structurally with `"src" in
+  inline`; `pushRun` only merges adjacent Runs, never coalesces across
+  an image. New inline kinds should follow the same `"discriminator"
+  in inline` pattern rather than adding a `kind` tag.
 
 ## Office.js gotchas
 
@@ -161,5 +167,19 @@ Table rendering:
   proper "Header Row" style binding instead, that's a per-cell
   styleBuiltIn change in `applyCell`.
 
-After M4: style-mapping UI (M5), images/footnotes/math (M6), polish
-+ distribution (M7).
+Image rendering:
+- We pass `<img src="…" alt="…" title="…"/>` to
+  `paragraph.insertHtml(html, End)` and let Word's HTML paste pipeline
+  fetch the URL. Data URIs decode inline; if the fetch fails (offline
+  / CORS / 404) Word shows the alt text — matches `<img>` behavior in
+  a browser.
+- `applyImage` escapes the src/alt/title via the local `escapeHtml`
+  helper before splicing them into the tag. Don't skip this — the
+  src/alt strings are untrusted user input that lands inside an HTML
+  attribute.
+- The cell path in `applyCell` calls `applyImage` directly on the
+  cell's first paragraph (no separate run/range dance — images are
+  block-shaped inside their inline slot).
+
+After basic Markdown: style-mapping UI (M5), footnotes/math (M6),
+polish + distribution (M7).
