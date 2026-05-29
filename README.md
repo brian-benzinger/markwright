@@ -172,7 +172,10 @@ debugging wrapper pulled ~290 MB of Azure ARM SDK via its
 manifest.xml             XML add-in-only manifest (cross-platform)
 src/
   convert/               markdown-it → Block[] AST (pure, unit-tested)
-  taskpane/              Task pane UI + Office.js applier
+  taskpane/
+    taskpane.ts          UI bootstrap + Convert button handler (DOM only)
+    apply.ts             Office.js applier: walks Block[] into the doc
+    taskpane.html/css    Task pane shell
   commands/              Ribbon function-file (reserved for future actions)
   assets/                Manifest icons
 tests/                   Vitest suite for the converter
