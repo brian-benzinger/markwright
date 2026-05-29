@@ -19,7 +19,8 @@ export type Block =
       depth: number;
       listId: number;
       runs: Run[];
-    };
+    }
+  | { kind: "codeBlock"; content: string; language?: string };
 
 const md = new MarkdownIt({ html: false, linkify: false, typographer: false });
 
@@ -78,6 +79,13 @@ export function parseMarkdown(source: string): Block[] {
       continue;
     }
     if (t.type === "list_item_open" || t.type === "list_item_close") continue;
+
+    if (t.type === "fence" || t.type === "code_block") {
+      const language =
+        t.type === "fence" && t.info.trim() ? t.info.trim() : undefined;
+      blocks.push({ kind: "codeBlock", content: t.content, language });
+      continue;
+    }
 
     if (t.type === "heading_open" || t.type === "paragraph_open") {
       const runs = flattenInline(tokens[i + 1]);

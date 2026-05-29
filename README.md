@@ -24,10 +24,13 @@ marks and lists bind to the host document's own styles.
   Markdown list scope)
 - Blockquotes (bind to Word's "Quote" style; nesting tracked in the AST as
   `quoteDepth` though depth-2+ doesn't visually scale indent yet)
+- Fenced code blocks (` ``` `, with language tag captured) and 4-space
+  indented code blocks — rendered as one monospaced (Consolas) Word
+  paragraph with `\v` line breaks so the snippet stays one block
 
-**Not yet** — fenced/indented code blocks, thematic breaks (`---`), tables,
-task lists, images, footnotes, math, the style-mapping UI, and the OOXML
-fast path for bulk insertion.
+**Not yet** — thematic breaks (`---`), tables, task lists, images,
+footnotes, math, the style-mapping UI, and the OOXML fast path for bulk
+insertion.
 
 ## Prerequisites
 
@@ -95,6 +98,7 @@ Block[]   ← stable seam between parsing and host integration
      │  │ paragraph  { runs: Run[], quoteDepth? }                  │
      │  │ heading    { level: 1..6, runs: Run[] }                  │
      │  │ listItem   { ordered, depth, listId, runs: Run[] }       │
+     │  │ codeBlock  { content: string, language? }                │
      │  │ Run        { text, bold?, italic?, strike?, code?, link? }│
      │  └──────────────────────────────────────────────────────────┘
      ▼
@@ -132,9 +136,9 @@ tsconfig.json
 
 Remaining in **M3** (CommonMark coverage):
 
-- Fenced and indented code blocks
 - Thematic breaks (`---`)
 - Visual indent scaling for nested blockquotes (`quoteDepth > 1`)
+- Code blocks inside blockquotes (currently dropped — rare in practice)
 
 **M4** (GFM): tables (likely requires the Word Table API or revisiting OOXML),
 task lists, table-of-contents-friendly headings.
