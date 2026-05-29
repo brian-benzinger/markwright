@@ -51,11 +51,25 @@ server can serve HTTPS — Word refuses to load add-ins over plain HTTP.
 ```bash
 npm run typecheck   # tsc --noEmit
 npm run lint        # office-addin-lint (ESLint + Prettier)
-npm test            # vitest run
+npm test            # vitest run --coverage
 npm run build       # production webpack build
 ```
 
 All four also run in CI on every PR via `.github/workflows/ci.yml`.
+
+### Coverage
+
+`npm test` collects v8 coverage scoped to `src/convert/**` and fails the
+gate if any threshold is missed. The Office.js applier in
+`src/taskpane/` is excluded because it requires the live Word host —
+verify it via sideload, not vitest.
+
+| metric     | threshold |
+| ---------- | --------: |
+| lines      |        90 |
+| statements |        90 |
+| functions  |       100 |
+| branches   |        80 |
 
 ## Architecture
 
