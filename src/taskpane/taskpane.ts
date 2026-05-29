@@ -1,4 +1,4 @@
-import { parseMarkdown, type Block } from "../convert";
+import { parseMarkdown, type Block, type Run } from "../convert";
 
 Office.onReady((info) => {
   if (info.host !== Office.HostType.Word) {
@@ -51,14 +51,11 @@ async function onConvert(): Promise<void> {
       // after that paragraph, so the original cursor position is preserved
       // at the end of the inserted content.
       selection.insertText("", Word.InsertLocation.replace);
-      let para = selection.insertParagraph(
-        blocks[0].text,
-        Word.InsertLocation.before,
-      );
-      applyBlockStyle(para, blocks[0]);
+      let para = selection.insertParagraph("", Word.InsertLocation.before);
+      applyBlock(para, blocks[0]);
       for (let i = 1; i < blocks.length; i++) {
-        para = para.insertParagraph(blocks[i].text, Word.InsertLocation.after);
-        applyBlockStyle(para, blocks[i]);
+        para = para.insertParagraph("", Word.InsertLocation.after);
+        applyBlock(para, blocks[i]);
       }
       await context.sync();
     });
@@ -69,11 +66,24 @@ async function onConvert(): Promise<void> {
   }
 }
 
-function applyBlockStyle(paragraph: Word.Paragraph, block: Block): void {
+function applyBlock(paragraph: Word.Paragraph, block: Block): void {
   paragraph.styleBuiltIn =
     block.kind === "heading"
       ? headingStyle(block.level)
       : Word.BuiltInStyleName.normal;
+  for (const run of block.runs) {
+    applyRun(paragraph, run);
+  }
+}
+
+function applyRun(paragraph: Word.Paragraph, run: Run): void {
+  const range = paragraph.insertText(run.text, Word.InsertLocation.end);
+  if (run.bold) range.font.bold = true;
+  if (run.italic) range.font.italic = true;
+  if (run.strike) range.font.strikeThrough = true;
+  // Word lacks a built-in "code" character style; apply a monospace font directly.
+  if (run.code) range.font.name = "Consolas";
+  if (run.link) range.hyperlink = run.link;
 }
 
 function headingStyle(level: 1 | 2 | 3 | 4 | 5 | 6): Word.BuiltInStyleName {

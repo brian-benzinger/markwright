@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseMarkdown } from "../src/convert";
 
-describe("parseMarkdown", () => {
+describe("parseMarkdown — block shape", () => {
   it("returns an empty array for empty input", () => {
     expect(parseMarkdown("")).toEqual([]);
   });
@@ -10,9 +10,9 @@ describe("parseMarkdown", () => {
     expect(parseMarkdown("   \n  \n")).toEqual([]);
   });
 
-  it("parses a single paragraph", () => {
+  it("parses a single paragraph as one plain run", () => {
     expect(parseMarkdown("hello world")).toEqual([
-      { kind: "paragraph", text: "hello world" },
+      { kind: "paragraph", runs: [{ text: "hello world" }] },
     ]);
   });
 
@@ -25,30 +25,142 @@ describe("parseMarkdown", () => {
     [6, "###### heading text"],
   ])("parses heading level %i", (level, source) => {
     expect(parseMarkdown(source)).toEqual([
-      { kind: "heading", level, text: "heading text" },
+      { kind: "heading", level, runs: [{ text: "heading text" }] },
     ]);
   });
 
   it("preserves block order across mixed input", () => {
-    const out = parseMarkdown("# H\n\np1\n\n## S\n\np2");
-    expect(out).toEqual([
-      { kind: "heading", level: 1, text: "H" },
-      { kind: "paragraph", text: "p1" },
-      { kind: "heading", level: 2, text: "S" },
-      { kind: "paragraph", text: "p2" },
+    expect(parseMarkdown("# H\n\np1\n\n## S\n\np2")).toEqual([
+      { kind: "heading", level: 1, runs: [{ text: "H" }] },
+      { kind: "paragraph", runs: [{ text: "p1" }] },
+      { kind: "heading", level: 2, runs: [{ text: "S" }] },
+      { kind: "paragraph", runs: [{ text: "p2" }] },
     ]);
   });
 
-  it("preserves XML special characters verbatim (Office.js handles escaping)", () => {
+  it("preserves XML special characters verbatim", () => {
     expect(parseMarkdown("a & b < c > d")).toEqual([
-      { kind: "paragraph", text: "a & b < c > d" },
+      { kind: "paragraph", runs: [{ text: "a & b < c > d" }] },
+    ]);
+  });
+});
+
+describe("parseMarkdown — inline marks", () => {
+  it("parses bold", () => {
+    expect(parseMarkdown("a **bold** b")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "a " }, { text: "bold", bold: true }, { text: " b" }],
+      },
     ]);
   });
 
-  it("ignores block types not yet supported in M3 (lists, code, blockquote)", () => {
-    // Strict pre-M3 scope: lists/code/blockquote are silently skipped for now.
-    // Adding coverage for these is the next milestone and will update this test.
-    const out = parseMarkdown("- one\n- two\n\n> quote\n\n```\ncode\n```");
-    expect(out).toEqual([]);
+  it("parses italic from asterisks", () => {
+    expect(parseMarkdown("a *it* b")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "a " }, { text: "it", italic: true }, { text: " b" }],
+      },
+    ]);
+  });
+
+  it("parses italic from underscores", () => {
+    expect(parseMarkdown("a _it_ b")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "a " }, { text: "it", italic: true }, { text: " b" }],
+      },
+    ]);
+  });
+
+  it("parses nested bold + italic", () => {
+    expect(parseMarkdown("***both***")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "both", bold: true, italic: true }],
+      },
+    ]);
+  });
+
+  it("parses strikethrough", () => {
+    expect(parseMarkdown("a ~~gone~~ b")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "a " }, { text: "gone", strike: true }, { text: " b" }],
+      },
+    ]);
+  });
+
+  it("parses inline code", () => {
+    expect(parseMarkdown("call `foo()` now")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          { text: "call " },
+          { text: "foo()", code: true },
+          { text: " now" },
+        ],
+      },
+    ]);
+  });
+
+  it("parses a link with URL", () => {
+    expect(parseMarkdown("see [docs](https://example.com)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          { text: "see " },
+          { text: "docs", link: "https://example.com" },
+        ],
+      },
+    ]);
+  });
+
+  it("parses an autolink as a link with text == href", () => {
+    expect(parseMarkdown("at <https://example.com>")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          { text: "at " },
+          { text: "https://example.com", link: "https://example.com" },
+        ],
+      },
+    ]);
+  });
+
+  it("treats backslash escapes as literal text", () => {
+    expect(parseMarkdown("\\*not bold\\*")).toEqual([
+      { kind: "paragraph", runs: [{ text: "*not bold*" }] },
+    ]);
+  });
+
+  it("converts a soft line break to a single space", () => {
+    expect(parseMarkdown("line one\nline two")).toEqual([
+      { kind: "paragraph", runs: [{ text: "line one line two" }] },
+    ]);
+  });
+
+  it("converts a hard line break (two trailing spaces) to U+000B", () => {
+    expect(parseMarkdown("line one  \nline two")).toEqual([
+      { kind: "paragraph", runs: [{ text: "line one\vline two" }] },
+    ]);
+  });
+
+  it("applies marks inside headings", () => {
+    expect(parseMarkdown("# **bold** heading")).toEqual([
+      {
+        kind: "heading",
+        level: 1,
+        runs: [{ text: "bold", bold: true }, { text: " heading" }],
+      },
+    ]);
+  });
+
+  it("merges adjacent runs with identical formatting", () => {
+    // A softbreak inside a bold span produces three adjacent bold runs
+    // (text, space, text) — they should collapse into one.
+    expect(parseMarkdown("**one\ntwo**")).toEqual([
+      { kind: "paragraph", runs: [{ text: "one two", bold: true }] },
+    ]);
   });
 });
