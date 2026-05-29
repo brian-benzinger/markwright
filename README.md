@@ -6,9 +6,26 @@ A cross-platform Word add-in (Windows, Mac, web) that pastes markdown into the
 active document and maps it onto that document's own styles. Built on
 Office.js + TypeScript.
 
-This repository is at **Milestone 1**: a sideloadable skeleton with a task
-pane, a textarea, and a Convert button that drops the raw input at the
-selection. No markdown parsing yet — that arrives in Milestone 2.
+## Status
+
+Mid-**Milestone 3**. The task pane parses markdown into a small Block AST and
+writes it into the document via the Word object model (`paragraph.styleBuiltIn`,
+`range.font.*`, `paragraph.startNewList()`), so headings, paragraphs, inline
+marks and lists bind to the host document's own styles.
+
+**Supported today**
+
+- Paragraphs
+- Headings `#` through `######` (bind to Word's built-in Heading 1–6 styles)
+- Inline: `**bold**`, `*italic*` / `_italic_`, `~~strike~~`, `` `inline code` ``
+  (monospace font), `[links](url)`, autolinks `<https://…>`, hard line breaks
+  (two trailing spaces), backslash escapes
+- Bullet lists, ordered lists, mixed nested lists (continuous numbering per
+  Markdown list scope)
+
+**Not yet** — blockquotes, fenced/indented code blocks, thematic breaks
+(`---`), tables, task lists, images, footnotes, math, the style-mapping UI,
+and the OOXML fast path for bulk insertion.
 
 ## Prerequisites
 
@@ -40,13 +57,47 @@ npm run build       # production webpack build
 
 All four also run in CI on every PR via `.github/workflows/ci.yml`.
 
+## Architecture
+
+```
+markdown text
+     │
+     ▼
+markdown-it tokens
+     │  parseMarkdown() walks tokens, flattens inline children into
+     │  Run[] with mark-depth tracking, and groups list items by a
+     │  synthetic listId.
+     ▼
+Block[]   ← stable seam between parsing and host integration
+     │  ┌──────────────────────────────────────────────────────────┐
+     │  │ paragraph  { runs: Run[] }                               │
+     │  │ heading    { level: 1..6, runs: Run[] }                  │
+     │  │ listItem   { ordered, depth, listId, runs: Run[] }       │
+     │  │ Run        { text, bold?, italic?, strike?, code?, link? }│
+     │  └──────────────────────────────────────────────────────────┘
+     ▼
+Office.js (Word object model)
+     paragraph.styleBuiltIn = Heading1..6 | Normal | ListParagraph
+     range.font.bold / italic / strikeThrough / name
+     range.hyperlink
+     paragraph.startNewList() + setLevelBullet/Numbering + listItem.level
+```
+
+The Block AST is the load-bearing abstraction. An earlier attempt (`pivot to
+Office.js`, see PR #5) generated a Flat OPC OOXML fragment and called
+`Range.insertOoxml`; Word interpreted our minimal style declarations as the
+authoritative definitions of Heading1–6 and silently flattened the output.
+The object-model path binds to the host document's real styles instead. OOXML
+emission stays in the design as a future option for bulk content (tables,
+images, footnotes), implemented as another emitter over the same `Block[]`.
+
 ## Project layout
 
 ```
 manifest.xml             XML add-in-only manifest (cross-platform)
 src/
-  convert/               Markdown → OOXML emitter (pure functions, unit-tested)
-  taskpane/              Task pane UI (textarea + Convert button)
+  convert/               markdown-it → Block[] AST (pure, unit-tested)
+  taskpane/              Task pane UI + Office.js applier
   commands/              Ribbon function-file (reserved for future actions)
   assets/                Manifest icons
 tests/                   Vitest suite for the converter
@@ -57,15 +108,21 @@ tsconfig.json
 
 ## Roadmap
 
-See the design brief for the full plan. Next milestones:
+Remaining in **M3** (CommonMark coverage):
 
-2. Parse + naive insert — wire up `markdown-it`, emit a trivial OOXML fragment.
-3. MVP coverage — AST-to-OOXML emitter for headings, lists, emphasis, code,
-   blockquotes, links, tables. Defaults to built-in Word styles.
-4. Style binding — read the document's named styles, expose a mapping UI,
-   persist via the Office `Settings` API.
-5. Stretch — images, footnotes, math.
-6. Polish + distribution.
+- Blockquotes
+- Fenced and indented code blocks
+- Thematic breaks (`---`)
+
+**M4** (GFM): tables (likely requires the Word Table API or revisiting OOXML),
+task lists, table-of-contents-friendly headings.
+
+**M5** (style binding): read the document's named styles, expose a mapping UI,
+persist via the Office `Settings` API.
+
+**M6** (stretch): images, footnotes, math.
+
+**M7**: polish + distribution.
 
 ## License
 

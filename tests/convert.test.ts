@@ -164,3 +164,124 @@ describe("parseMarkdown — inline marks", () => {
     ]);
   });
 });
+
+describe("parseMarkdown — lists", () => {
+  it("parses a flat bullet list", () => {
+    expect(parseMarkdown("- a\n- b\n- c")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "a" }],
+      },
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "b" }],
+      },
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "c" }],
+      },
+    ]);
+  });
+
+  it("parses a flat ordered list", () => {
+    expect(parseMarkdown("1. one\n2. two")).toEqual([
+      {
+        kind: "listItem",
+        ordered: true,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "one" }],
+      },
+      {
+        kind: "listItem",
+        ordered: true,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "two" }],
+      },
+    ]);
+  });
+
+  it("assigns a fresh listId to each separate top-level list", () => {
+    // Blank line between the lists splits them into two scopes; the
+    // second list should get a new listId so the applier knows to start
+    // a new Word.List instead of continuing numbering.
+    const out = parseMarkdown("- a\n\n1. b");
+    expect(out.map((b) => "listId" in b && b.listId)).toEqual([1, 2]);
+  });
+
+  it("tracks depth and ordered-ness on nested lists", () => {
+    const out = parseMarkdown("- a\n  1. nested\n  2. also\n- b");
+    expect(out).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "a" }],
+      },
+      {
+        kind: "listItem",
+        ordered: true,
+        depth: 1,
+        listId: 1,
+        runs: [{ text: "nested" }],
+      },
+      {
+        kind: "listItem",
+        ordered: true,
+        depth: 1,
+        listId: 1,
+        runs: [{ text: "also" }],
+      },
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "b" }],
+      },
+    ]);
+  });
+
+  it("keeps a nested list within the same listId as its parent", () => {
+    const out = parseMarkdown("- top\n  - nested");
+    const ids = out.map((b) => "listId" in b && b.listId);
+    expect(ids).toEqual([1, 1]);
+  });
+
+  it("applies inline marks inside list items", () => {
+    expect(parseMarkdown("- a **bold** item")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [
+          { text: "a " },
+          { text: "bold", bold: true },
+          { text: " item" },
+        ],
+      },
+    ]);
+  });
+
+  it("interleaves headings and lists without dropping order", () => {
+    const out = parseMarkdown("# H\n\n- a\n\np\n\n1. one");
+    expect(out.map((b) => b.kind)).toEqual([
+      "heading",
+      "listItem",
+      "paragraph",
+      "listItem",
+    ]);
+  });
+});
