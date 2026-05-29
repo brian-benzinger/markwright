@@ -311,6 +311,58 @@ describe("parseMarkdown — lists", () => {
   });
 });
 
+describe("parseMarkdown — code blocks", () => {
+  it("parses a fenced code block", () => {
+    expect(parseMarkdown("```\nhello\nworld\n```")).toEqual([
+      { kind: "codeBlock", content: "hello\nworld\n" },
+    ]);
+  });
+
+  it("captures the language tag from a fence", () => {
+    expect(parseMarkdown("```javascript\nfoo();\n```")).toEqual([
+      { kind: "codeBlock", content: "foo();\n", language: "javascript" },
+    ]);
+  });
+
+  it("trims whitespace around the language tag", () => {
+    expect(parseMarkdown("```  ts \nx\n```")).toEqual([
+      { kind: "codeBlock", content: "x\n", language: "ts" },
+    ]);
+  });
+
+  it("parses an indented (4-space) code block", () => {
+    expect(parseMarkdown("    hello\n    world")).toEqual([
+      { kind: "codeBlock", content: "hello\nworld\n" },
+    ]);
+  });
+
+  it("does not parse markdown syntax inside a code block", () => {
+    expect(parseMarkdown("```\n**bold** `code`\n```")).toEqual([
+      { kind: "codeBlock", content: "**bold** `code`\n" },
+    ]);
+  });
+
+  it("preserves leading whitespace and blank lines inside the block", () => {
+    expect(parseMarkdown("```\n  indented\n\n  more\n```")).toEqual([
+      { kind: "codeBlock", content: "  indented\n\n  more\n" },
+    ]);
+  });
+
+  it("treats an empty fence as an empty code block (no language)", () => {
+    expect(parseMarkdown("```\n```")).toEqual([
+      { kind: "codeBlock", content: "" },
+    ]);
+  });
+
+  it("interleaves a code block between paragraphs", () => {
+    expect(parseMarkdown("before\n\n```\ncode\n```\n\nafter")).toEqual([
+      { kind: "paragraph", runs: [{ text: "before" }] },
+      { kind: "codeBlock", content: "code\n" },
+      { kind: "paragraph", runs: [{ text: "after" }] },
+    ]);
+  });
+});
+
 describe("parseMarkdown — blockquotes", () => {
   it("emits a single-line blockquote as a quoted paragraph", () => {
     expect(parseMarkdown("> quoted line")).toEqual([

@@ -103,6 +103,17 @@ function applyBlock(
   block: Block,
   state: ListState,
 ): void {
+  if (block.kind === "codeBlock") {
+    paragraph.styleBuiltIn = Word.BuiltInStyleName.normal;
+    // markdown-it always emits a trailing newline; drop it. Remaining
+    // newlines become in-paragraph line breaks so the whole snippet
+    // lives in one Word paragraph and a stray Enter doesn't split it.
+    const text = block.content.replace(/\n$/, "").replace(/\n/g, "\v");
+    if (text === "") return;
+    const range = paragraph.insertText(text, Word.InsertLocation.end);
+    range.font.name = "Consolas";
+    return;
+  }
   if (block.kind === "listItem") {
     if (state.currentList === null || state.currentListId !== block.listId) {
       state.currentList = paragraph.startNewList();
