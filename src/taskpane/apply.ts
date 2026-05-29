@@ -88,20 +88,20 @@ function applyBlock(paragraph: Word.Paragraph, block: Block, state: RenderState)
     return;
   }
   if (block.kind === "listItem") {
-    // Order matters: set the paragraph style FIRST so the paragraph is
-    // already shaped like a list item before we attach it. Then create
-    // (or extend) the list, configure the level's bullet/numbering,
-    // and only set listItem.level when it actually differs from 0 — at
-    // depth 0 the level is the default, and setting it on a brand-new
-    // list item can race with startNewList's async attachment and
-    // throw ItemNotFound.
-    paragraph.styleBuiltIn = Word.BuiltInStyleName.listParagraph;
+    // Don't set styleBuiltIn = listParagraph here. The list-level config
+    // (setLevelBullet / setLevelNumbering) plus Word's default list
+    // indent already produce a bulleted/numbered item; setting the
+    // List Paragraph style on TOP of that double-indents the first item
+    // and — worse — detaches subsequent items from the list (Office.js
+    // styleBuiltIn assignment can clear list membership).
     if (state.currentList === null || state.currentListId !== block.listId) {
       state.currentList = paragraph.startNewList();
       state.currentListId = block.listId;
     }
     configureListLevel(state, block.depth, block.ordered);
     if (block.depth > 0) {
+      // depth 0 is the default after startNewList; setting it can race
+      // with the queued attachment and throw ItemNotFound.
       paragraph.listItem.level = block.depth;
     }
     if (block.checked !== undefined) {
@@ -236,10 +236,20 @@ function escapeHtml(s: string): string {
 }
 
 function formatRange(range: Word.Range, run: Run, forceBold: boolean): void {
-  if (run.bold || forceBold) range.font.bold = true;
-  if (run.italic) range.font.italic = true;
-  if (run.strike) range.font.strikeThrough = true;
-  // Word has no built-in "code" character style; fall back to a monospace font.
+  // Always assign the toggleable marks explicitly. insertText("…", End)
+  // makes the new range inherit the previous character's formatting in
+  // Word, so a `**bold** plain` paragraph would leave `plain` bold
+  // unless we set bold = false explicitly here.
+  range.font.bold = !!run.bold || forceBold;
+  range.font.italic = !!run.italic;
+  range.font.strikeThrough = !!run.strike;
+  // Word has no built-in "code" character style; fall back to a monospace
+  // font. We only force-set the name on code runs — non-code runs leave
+  // the paragraph's default font alone, which means a paragraph like
+  // ``code` text` will leave `text` in Consolas until the end of the
+  // paragraph. Known limitation; the alternative is reading the
+  // paragraph's default font name via load+sync, which would force a
+  // mid-flow sync we're not paying yet.
   if (run.code) range.font.name = "Consolas";
   if (run.link) range.hyperlink = run.link;
 }
