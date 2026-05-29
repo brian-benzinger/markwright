@@ -8,12 +8,15 @@ Office.js + TypeScript.
 
 ## Status
 
-Mid-**Milestone 3**. The task pane parses markdown into a small Block AST and
-writes it into the document via the Word object model (`paragraph.styleBuiltIn`,
-`range.font.*`, `paragraph.startNewList()`), so headings, paragraphs, inline
-marks and lists bind to the host document's own styles.
+**Basic Markdown is complete.** The task pane parses markdown into a
+small `Block` AST and writes it into the document via the Word object
+model (`paragraph.styleBuiltIn`, `range.font.*`, `paragraph.startNewList()`,
+`paragraph.insertTable`, `paragraph.insertHtml` for `<hr>` and `<img>`),
+so every CommonMark + GFM construct binds to the host document's own
+styles. Next milestones: style binding UI (M5), then stretch
+(footnotes, math).
 
-**Basic Markdown (CommonMark + GFM) is fully supported.**
+**Supported — full CommonMark + GFM:**
 
 - Paragraphs
 - Headings (ATX `#`..`######` *and* Setext `===` / `---`) — bind to Word's
@@ -118,10 +121,13 @@ markdown text
      │
      ▼
 markdown-it tokens
-     │  parseMarkdown() walks tokens, dispatches heading/paragraph/
-     │  list-item, and lets flattenInline() collapse inline children
-     │  into Run[] with a shared InlineState (mark depths + link). List
-     │  items get a synthetic listId per top-level Markdown scope.
+     │  parseMarkdown() walks tokens and dispatches per block kind
+     │  (heading / paragraph / list-item / code / hr / table). The
+     │  shared flattenInline() collapses inline children into
+     │  Inline[] = (Run | Image)[] with an InlineState struct
+     │  tracking mark depths + the current link. List items get a
+     │  synthetic listId per top-level Markdown scope so the applier
+     │  knows when to start a new Word.List vs. extend the active one.
      ▼
 Block[]   ← stable seam between parsing and host integration
      │  ┌──────────────────────────────────────────────────────────┐
@@ -147,13 +153,15 @@ Office.js (Word object model)
      paragraph.insertTable(rows, cols, Before) + cell.body + horizontalAlignment
 ```
 
-The Block AST is the load-bearing abstraction. An earlier attempt (`pivot to
-Office.js`, see PR #5) generated a Flat OPC OOXML fragment and called
-`Range.insertOoxml`; Word interpreted our minimal style declarations as the
-authoritative definitions of Heading1–6 and silently flattened the output.
-The object-model path binds to the host document's real styles instead. OOXML
-emission stays in the design as a future option for bulk content (tables,
-images, footnotes), implemented as another emitter over the same `Block[]`.
+The `Block` AST is the load-bearing abstraction. An earlier attempt
+(`pivot to Office.js`, see PR #5) generated a Flat OPC OOXML fragment
+and called `Range.insertOoxml`; Word interpreted our minimal style
+declarations as the authoritative definitions of Heading1–6 and
+silently flattened the output. The object-model path binds to the host
+document's real styles instead. OOXML emission stays in the design as
+a future option for surfaces the object model can't reach (footnotes,
+math, possibly a bulk-insertion fast path for very large documents),
+implemented as another emitter over the same `Block[]`.
 
 ## Dependency footprint
 
@@ -188,27 +196,37 @@ src/
   assets/                Manifest icons
 tests/                   Vitest suite for the converter
 webpack.config.js        Dual-entry build, copies manifest, serves over HTTPS
-eslint.config.mjs        Flat ESLint config extending office-addin-lint
+eslint.config.mjs        Flat ESLint config: @typescript-eslint +
+                         eslint-plugin-office-addins + strict additions
 tsconfig.json
 ```
 
 ## Roadmap
 
-Remaining in **M3** (CommonMark coverage — minor polish):
+**Done** — M3 (CommonMark) and M4 (GFM): paragraphs, headings (ATX +
+Setext), inline marks, lists (bullet, ordered, nested, task), code
+blocks, blockquotes, thematic breaks, tables with alignment, images,
+and the supporting CommonMark verifications (reference links, HTML
+entities).
+
+**Open polish** — small lossy spots flagged in the code:
 
 - Visual indent scaling for nested blockquotes (`quoteDepth > 1`)
-- Code blocks and thematic breaks inside blockquotes (currently dropped
-  — rare in practice)
+- Code blocks, thematic breaks, and tables nested inside blockquotes
+  (currently dropped — rare in practice)
+- Tables inside list items (dropped — GFM doesn't formally allow this)
 
-**M4** (GFM): tables (likely requires the Word Table API or revisiting OOXML),
-task lists, table-of-contents-friendly headings.
+**M5 — style binding.** Read the host document's named styles, expose
+a mapping UI so users can pick which Word style each Markdown
+construct binds to, persist the mapping via the Office `Settings`
+API.
 
-**M5** (style binding): read the document's named styles, expose a mapping UI,
-persist via the Office `Settings` API.
+**M6 — stretch.** Footnotes (Pandoc-style), math (LaTeX → OMML). Both
+likely revisit OOXML emission since the object model doesn't expose
+them.
 
-**M6** (stretch): images, footnotes, math.
-
-**M7**: polish + distribution.
+**M7 — polish + distribution.** Manifest cleanup for store submission,
+icons at additional sizes if needed, end-to-end sideload docs.
 
 ## License
 
