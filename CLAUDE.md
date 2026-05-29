@@ -58,7 +58,13 @@ for `insertOoxml` again unless you're shipping tables/images/footnotes
 - `~~strike~~` parses as `s_open`/`s_close` by default, no plugin.
 - `code_inline` is atomic (no open/close); content lives on the token.
 - Autolinks `<https://x>` arrive as ordinary `link_open` with
-  `markup: "autolink"`.
+  `markup: "autolink"`. Bare-URL autolinks (`linkify: true`) produce
+  the same shape — flattenInline handles them without extra code.
+- GFM task markers are not a markdown-it feature in core. We detect
+  `[ ] ` / `[x] ` / `[X] ` on the FIRST text child of a list-item
+  paragraph and strip it before flattening; no plugin required. If you
+  add `markdown-it-task-lists` later the prefix would already be gone
+  before it ran, so don't.
 - Container tokens (`bullet_list_open`, `ordered_list_open`,
   `blockquote_open`, `list_item_open`) wrap inner `paragraph_open`
   tokens. The parser tracks depth and `listStack` to decide whether
