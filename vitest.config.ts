@@ -6,7 +6,7 @@ export default defineConfig({
       provider: "v8",
       include: ["src/convert/**"],
       reporter: ["text", "html"],
-      thresholds: { lines: 90, statements: 90, functions: 100, branches: 80 },
+      thresholds: { lines: 90, statements: 90, functions: 100, branches: 90 },
     },
   },
 });

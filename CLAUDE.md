@@ -66,7 +66,7 @@ for `insertOoxml` again unless you're shipping tables/images/footnotes
   `src/convert/` is in scope — the Office.js applier can't execute
   under vitest because the `Word` global only exists in the host.
   Thresholds in `vitest.config.ts`: lines 90, statements 90,
-  functions 100, branches 80.
+  functions 100, branches 90.
 
 ## Outstanding M3 work
 

@@ -69,7 +69,7 @@ verify it via sideload, not vitest.
 | lines      |        90 |
 | statements |        90 |
 | functions  |       100 |
-| branches   |        80 |
+| branches   |        90 |
 
 ## Architecture
 
