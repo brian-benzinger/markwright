@@ -9,8 +9,10 @@ The load-bearing abstraction is `Block[]` in `src/convert/index.ts`.
 Parsing markdown is one concern; applying it to Word is another.
 Adding a new block type means: extend `Block` (and `Run` if it's
 inline-level), teach `parseMarkdown` to emit it, teach `applyBlock`
-in `src/taskpane/taskpane.ts` to render it. Tests live in
-`tests/convert.test.ts` and stay pure — they never touch Office.js.
+in `src/taskpane/apply.ts` to render it. The task pane UI in
+`src/taskpane/taskpane.ts` is just DOM glue that calls
+`applyBlocks(blocks)`. Tests live in `tests/convert.test.ts` and
+stay pure — they never touch Office.js.
 
 A few patterns that recur in the applier:
 
