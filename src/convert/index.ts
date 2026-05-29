@@ -19,11 +19,15 @@ export type Block =
       depth: number;
       listId: number;
       runs: Run[];
+      checked?: boolean;
     }
   | { kind: "codeBlock"; content: string; language?: string }
   | { kind: "thematicBreak" };
 
-const md = new MarkdownIt({ html: false, linkify: false, typographer: false });
+// linkify converts bare URLs (https://example.com) into link tokens with
+// the same shape as [label](href), so the existing flattenInline link
+// handling covers them with no extra logic.
+const md = new MarkdownIt({ html: false, linkify: true, typographer: false });
 
 export function parseMarkdown(source: string): Block[] {
   const tokens = md.parse(source, {});
@@ -93,15 +97,22 @@ export function parseMarkdown(source: string): Block[] {
     }
 
     if (t.type === "heading_open" || t.type === "paragraph_open") {
+      // GFM task lists ride on a `[ ]` / `[x]` prefix in the first text
+      // child. Detect (and strip) it before flattening so the prefix
+      // doesn't leak into the runs.
+      const checked =
+        t.type === "paragraph_open" && listStack.length > 0
+          ? consumeTaskPrefix(tokens[i + 1])
+          : undefined;
       const runs = flattenInline(tokens[i + 1]);
       // Skip the inline token (i+1) and the matching _close (i+2); the
       // for-loop's i++ takes us past the close.
       i += 2;
-      if (runs.length === 0) continue;
+      if (runs.length === 0 && checked === undefined) continue;
       if (t.type === "heading_open") {
         blocks.push({ kind: "heading", level: headingLevel(t.tag), runs });
       } else if (listStack.length > 0) {
-        blocks.push(listItemBlock(listStack, currentListId, runs));
+        blocks.push(listItemBlock(listStack, currentListId, runs, checked));
       } else {
         blocks.push({ kind: "paragraph", runs });
       }
@@ -110,14 +121,34 @@ export function parseMarkdown(source: string): Block[] {
   return blocks;
 }
 
-function listItemBlock(stack: Array<{ ordered: boolean }>, listId: number, runs: Run[]): Block {
+function listItemBlock(
+  stack: Array<{ ordered: boolean }>,
+  listId: number,
+  runs: Run[],
+  checked: boolean | undefined
+): Block {
   return {
     kind: "listItem",
     ordered: stack[stack.length - 1].ordered,
     depth: stack.length - 1,
     listId,
     runs,
+    ...(checked !== undefined ? { checked } : {}),
   };
+}
+
+// Mutates the inline token's first text child to strip a leading
+// `[ ]` / `[x]` / `[X]` task marker. Returns true for checked, false
+// for unchecked, undefined when no marker is present.
+function consumeTaskPrefix(token: Token | undefined): boolean | undefined {
+  if (!token || token.type !== "inline") return undefined;
+  const children = token.children ?? [];
+  const first = children[0];
+  if (!first || first.type !== "text") return undefined;
+  const match = /^\[([ xX])\] ?/.exec(first.content);
+  if (!match) return undefined;
+  first.content = first.content.slice(match[0].length);
+  return match[1] !== " ";
 }
 
 type InlineState = {

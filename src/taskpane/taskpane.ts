@@ -120,6 +120,13 @@ function applyBlock(paragraph: Word.Paragraph, block: Block, state: ListState): 
     configureListLevel(state, block.depth, block.ordered);
     paragraph.styleBuiltIn = Word.BuiltInStyleName.listParagraph;
     paragraph.listItem.level = block.depth;
+    if (block.checked !== undefined) {
+      // The list bullet still renders alongside the checkbox. Swapping
+      // to a custom level bullet via setLevelBullet(custom, ...) would
+      // be per-level and would break mixed task / non-task items in
+      // the same list scope.
+      paragraph.insertText(block.checked ? "☑ " : "☐ ", Word.InsertLocation.end);
+    }
   } else if (block.kind === "paragraph" && block.quoteDepth) {
     paragraph.styleBuiltIn = Word.BuiltInStyleName.quote;
     // TODO: visually scale indent for quoteDepth > 1. Word's Quote style

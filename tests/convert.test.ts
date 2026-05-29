@@ -369,6 +369,150 @@ describe("parseMarkdown — code blocks", () => {
   });
 });
 
+describe("parseMarkdown — task lists", () => {
+  it("parses an unchecked task as checked: false", () => {
+    expect(parseMarkdown("- [ ] todo")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "todo" }],
+        checked: false,
+      },
+    ]);
+  });
+
+  it.each([
+    ["lowercase", "- [x] done"],
+    ["uppercase", "- [X] done"],
+  ])("parses a checked task (%s x) as checked: true", (_, source) => {
+    expect(parseMarkdown(source)).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "done" }],
+        checked: true,
+      },
+    ]);
+  });
+
+  it("preserves inline marks inside a task item", () => {
+    expect(parseMarkdown("- [ ] a **bold** task")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "a " }, { text: "bold", bold: true }, { text: " task" }],
+        checked: false,
+      },
+    ]);
+  });
+
+  it("mixes task and non-task items in one list", () => {
+    expect(parseMarkdown("- [ ] todo\n- plain\n- [x] done")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "todo" }],
+        checked: false,
+      },
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "plain" }],
+      },
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "done" }],
+        checked: true,
+      },
+    ]);
+  });
+
+  it("supports task markers in ordered lists", () => {
+    expect(parseMarkdown("1. [ ] step one\n2. [x] step two")).toEqual([
+      {
+        kind: "listItem",
+        ordered: true,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "step one" }],
+        checked: false,
+      },
+      {
+        kind: "listItem",
+        ordered: true,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "step two" }],
+        checked: true,
+      },
+    ]);
+  });
+
+  it("emits an empty task item when the marker is the only content", () => {
+    expect(parseMarkdown("- [ ]")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [],
+        checked: false,
+      },
+    ]);
+  });
+
+  it("treats a bracketed string that isn't a real task marker as literal text", () => {
+    // [todo] is not a valid task marker — the inner character must be
+    // exactly one of " ", "x", "X".
+    expect(parseMarkdown("- [todo] item")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "[todo] item" }],
+      },
+    ]);
+  });
+});
+
+describe("parseMarkdown — bare-URL autolinks", () => {
+  it("wraps a bare URL in a link run", () => {
+    expect(parseMarkdown("https://example.com")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "https://example.com", link: "https://example.com" }],
+      },
+    ]);
+  });
+
+  it("autolinks a URL mid-paragraph and preserves surrounding text", () => {
+    expect(parseMarkdown("see https://example.com today")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          { text: "see " },
+          { text: "https://example.com", link: "https://example.com" },
+          { text: " today" },
+        ],
+      },
+    ]);
+  });
+});
+
 describe("parseMarkdown — blockquotes", () => {
   it("emits a single-line blockquote as a quoted paragraph", () => {
     expect(parseMarkdown("> quoted line")).toEqual([

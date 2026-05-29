@@ -30,9 +30,13 @@ marks and lists bind to the host document's own styles.
 - Thematic breaks (`---`, `***`, `___`) — rendered via
   `paragraph.insertHtml("<hr/>", Replace)`, which Word interprets as a
   bottom-bordered paragraph
+- GFM **task lists** (`- [ ]`, `- [x]`, `- [X]`, including in ordered
+  lists) — rendered with `☐` / `☑` prepended to the run text
+- GFM **bare-URL autolinks** (`https://x` in flowing text becomes a
+  hyperlink)
 
-**Not yet** — tables, task lists, images, footnotes, math, the
-style-mapping UI, and the OOXML fast path for bulk insertion.
+**Not yet** — tables, images, footnotes, math, the style-mapping UI,
+and the OOXML fast path for bulk insertion.
 
 ## Prerequisites
 
@@ -114,7 +118,7 @@ Block[]   ← stable seam between parsing and host integration
      │  ┌──────────────────────────────────────────────────────────┐
      │  │ paragraph  { runs: Run[], quoteDepth? }                  │
      │  │ heading    { level: 1..6, runs: Run[] }                  │
-     │  │ listItem   { ordered, depth, listId, runs: Run[] }       │
+     │  │ listItem   { ordered, depth, listId, runs, checked? }   │
      │  │ codeBlock  { content: string, language? }                │
      │  │ thematicBreak  {}                                        │
      │  │ Run        { text, bold?, italic?, strike?, code?, link? }│
