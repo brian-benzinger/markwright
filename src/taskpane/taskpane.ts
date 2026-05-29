@@ -52,10 +52,32 @@ async function onConvert(): Promise<void> {
       // at the end of the inserted content.
       selection.insertText("", Word.InsertLocation.replace);
       let para = selection.insertParagraph("", Word.InsertLocation.before);
-      applyBlock(para, blocks[0]);
+      // Tracks the active Word.List so consecutive listItem blocks sharing
+      // the same listId continue numbering instead of restarting; the
+      // configuredLevels map memoises setLevelBullet/Numbering per list so
+      // we only run them once per level.
+      const state: ListState = {
+        currentList: null,
+        currentListId: 0,
+        configuredLevels: new Map(),
+      };
+
+      applyBlock(para, blocks[0], state);
       for (let i = 1; i < blocks.length; i++) {
-        para = para.insertParagraph("", Word.InsertLocation.after);
-        applyBlock(para, blocks[i]);
+        if (
+          blocks[i].kind === "listItem" &&
+          state.currentList !== null &&
+          (blocks[i] as { listId: number }).listId === state.currentListId
+        ) {
+          para = state.currentList.insertParagraph("", Word.InsertLocation.end);
+        } else {
+          para = para.insertParagraph("", Word.InsertLocation.after);
+          if (blocks[i].kind !== "listItem") {
+            state.currentList = null;
+            state.currentListId = 0;
+          }
+        }
+        applyBlock(para, blocks[i], state);
       }
       await context.sync();
     });
@@ -66,13 +88,53 @@ async function onConvert(): Promise<void> {
   }
 }
 
-function applyBlock(paragraph: Word.Paragraph, block: Block): void {
-  paragraph.styleBuiltIn =
-    block.kind === "heading"
-      ? headingStyle(block.level)
-      : Word.BuiltInStyleName.normal;
+type ListState = {
+  currentList: Word.List | null;
+  currentListId: number;
+  configuredLevels: Map<number, Set<number>>;
+};
+
+function applyBlock(
+  paragraph: Word.Paragraph,
+  block: Block,
+  state: ListState,
+): void {
+  if (block.kind === "listItem") {
+    if (state.currentList === null || state.currentListId !== block.listId) {
+      state.currentList = paragraph.startNewList();
+      state.currentListId = block.listId;
+    }
+    configureListLevel(state, block.depth, block.ordered);
+    paragraph.styleBuiltIn = Word.BuiltInStyleName.listParagraph;
+    paragraph.listItem.level = block.depth;
+  } else {
+    paragraph.styleBuiltIn =
+      block.kind === "heading"
+        ? headingStyle(block.level)
+        : Word.BuiltInStyleName.normal;
+  }
   for (const run of block.runs) {
     applyRun(paragraph, run);
+  }
+}
+
+function configureListLevel(
+  state: ListState,
+  depth: number,
+  ordered: boolean,
+): void {
+  if (state.currentList === null) return;
+  let levels = state.configuredLevels.get(state.currentListId);
+  if (!levels) {
+    levels = new Set();
+    state.configuredLevels.set(state.currentListId, levels);
+  }
+  if (levels.has(depth)) return;
+  levels.add(depth);
+  if (ordered) {
+    state.currentList.setLevelNumbering(depth, Word.ListNumbering.arabic);
+  } else {
+    state.currentList.setLevelBullet(depth, Word.ListBullet.solid);
   }
 }
 

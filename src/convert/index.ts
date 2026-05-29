@@ -12,40 +12,57 @@ export type Run = {
 
 export type Block =
   | { kind: "paragraph"; runs: Run[] }
-  | { kind: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; runs: Run[] };
+  | { kind: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; runs: Run[] }
+  | {
+      kind: "listItem";
+      ordered: boolean;
+      depth: number;
+      listId: number;
+      runs: Run[];
+    };
 
 const md = new MarkdownIt({ html: false, linkify: false, typographer: false });
-
-const CONTAINERS_OPEN = new Set([
-  "bullet_list_open",
-  "ordered_list_open",
-  "blockquote_open",
-  "list_item_open",
-]);
-const CONTAINERS_CLOSE = new Set([
-  "bullet_list_close",
-  "ordered_list_close",
-  "blockquote_close",
-  "list_item_close",
-]);
 
 export function parseMarkdown(source: string): Block[] {
   const tokens = md.parse(source, {});
   const blocks: Block[] = [];
-  // Suppress paragraphs nested inside lists/blockquotes until M3 ships
-  // first-class handling for those container types.
-  let containerDepth = 0;
+  // Blockquotes aren't supported yet; suppress their contents until they
+  // ship rather than emitting bare paragraphs that lose the quote semantics.
+  let blockquoteDepth = 0;
+  // listStack tracks ordered-ness per nesting level. listId is a synthetic
+  // counter that groups every item in one top-level Markdown list (including
+  // its nested sub-lists) so the applier knows when to start a fresh
+  // Word.List vs. continue an existing one.
+  const listStack: Array<{ ordered: boolean }> = [];
+  let listIdCounter = 0;
+  let currentListId = 0;
+
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
-    if (CONTAINERS_OPEN.has(t.type)) {
-      containerDepth++;
+
+    if (t.type === "blockquote_open") {
+      blockquoteDepth++;
       continue;
     }
-    if (CONTAINERS_CLOSE.has(t.type)) {
-      containerDepth--;
+    if (t.type === "blockquote_close") {
+      blockquoteDepth--;
       continue;
     }
-    if (containerDepth > 0) continue;
+    if (blockquoteDepth > 0) continue;
+
+    if (t.type === "bullet_list_open" || t.type === "ordered_list_open") {
+      if (listStack.length === 0) {
+        listIdCounter++;
+        currentListId = listIdCounter;
+      }
+      listStack.push({ ordered: t.type === "ordered_list_open" });
+      continue;
+    }
+    if (t.type === "bullet_list_close" || t.type === "ordered_list_close") {
+      listStack.pop();
+      continue;
+    }
+    if (t.type === "list_item_open" || t.type === "list_item_close") continue;
 
     if (t.type === "heading_open") {
       const runs = flattenInline(tokens[i + 1]);
@@ -56,7 +73,18 @@ export function parseMarkdown(source: string): Block[] {
     } else if (t.type === "paragraph_open") {
       const runs = flattenInline(tokens[i + 1]);
       if (runs.length > 0) {
-        blocks.push({ kind: "paragraph", runs });
+        if (listStack.length > 0) {
+          const top = listStack[listStack.length - 1];
+          blocks.push({
+            kind: "listItem",
+            ordered: top.ordered,
+            depth: listStack.length - 1,
+            listId: currentListId,
+            runs,
+          });
+        } else {
+          blocks.push({ kind: "paragraph", runs });
+        }
       }
       i += 2;
     }
