@@ -44,14 +44,25 @@ style-mapping UI, and the OOXML fast path for bulk insertion.
 
 ```bash
 npm install
-npm start          # builds, starts the dev server, and sideloads into Word desktop
-# or
-npm run dev-server # just runs the webpack dev server on https://localhost:3000
-npm run start:web  # sideload into Word on the web
+npx office-addin-dev-certs install   # first time per machine — installs the local CA
+npm run dev-server                   # serves the bundle on https://localhost:3000
 ```
 
-On first run, `office-addin-dev-certs` will install a local CA so the dev
-server can serve HTTPS — Word refuses to load add-ins over plain HTTP.
+Word refuses to load add-ins over plain HTTP, hence the cert install. Then
+sideload the manifest **once** per host:
+
+- **Word desktop:** *Insert → My Add-ins → Manage My Add-ins → Upload My Add-in*
+  → pick `dist/manifest.xml`.
+- **Word web:** *Home → Add-ins → More Add-ins → My Add-ins → Upload My Add-in*
+  → pick `dist/manifest.xml`.
+
+After the one-time sideload, edits hot-reload through the dev server — just
+refresh the task pane.
+
+> Earlier versions of this repo used `office-addin-debugging` for one-command
+> sideloading; we dropped it because its `@microsoft/m365agentstoolkit-cli`
+> peer dragged in the Azure ARM SDK (~290 MB of `node_modules`) for a
+> first-time-only convenience.
 
 ## Check before pushing
 
