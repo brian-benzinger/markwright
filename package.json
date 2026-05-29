@@ -16,7 +16,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "core-js": "^3.36.0",
     "markdown-it": "^14.2.0"
   },
   "devDependencies": {
