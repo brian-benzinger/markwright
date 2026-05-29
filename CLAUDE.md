@@ -40,6 +40,15 @@ A few patterns that recur in the applier:
   makes separate paragraphs, not list continuation. Memoise
   `setLevelBullet`/`setLevelNumbering` per `(list, level)` — calling
   them repeatedly resets Arabic numbering.
+- `paragraph.insertTable(rows, cols, location)` accepts only
+  Before/After (no Replace, like other paragraph inserts). We anchor
+  to an empty paragraph and reuse it for the next block via
+  `state.paragraphIsEmpty`. Cell contents live in `cell.body` (a full
+  `Word.Body`); reach the writable paragraph via
+  `cell.body.paragraphs.getFirst()` then `insertText` into it.
+- `Word.Alignment.centered` (not `center`). The setter on
+  `cell.horizontalAlignment` accepts the enum or the matching string
+  ("Left"/"Centered"/"Right"/"Justified").
 
 ## Why the Block AST exists (don't redo the OOXML pivot)
 
@@ -98,17 +107,19 @@ for `insertOoxml` again unless you're shipping tables/images/footnotes
   Thresholds in `vitest.config.ts`: lines 90, statements 90,
   functions 100, branches 90.
 
-## Outstanding M3 work
+## Outstanding work in M3 / M4
 
 - Visual indent scaling for nested blockquotes (`quoteDepth > 1`). The
   Quote style sets its own left indent; layering an additive override
   for deeper levels needs a `load()` + `sync()` of the style's defaults
   before each Word.run iteration, which we didn't want to pay for the
   common single-depth case. Revisit if real docs need it.
-- Code blocks and thematic breaks inside blockquotes: currently
-  dropped. The inside-blockquote branch only handles `paragraph_open`
-  and `heading_open`; `fence`/`code_block`/`hr` tokens fall through to
-  `continue`. Rare in practice — add when needed.
+- Code blocks, thematic breaks, and tables inside blockquotes:
+  currently dropped. The inside-blockquote branch only handles
+  `paragraph_open` and `heading_open`; everything else falls through
+  to `continue`. Rare in practice — add when needed.
+- Tables inside lists: dropped (the `table_open` branch is gated on
+  `listStack.length === 0`). GFM doesn't formally allow this anyway.
 
 Blockquote semantics are deliberately lossy: a heading or list item
 inside a blockquote becomes a flat quote-styled paragraph. This keeps
@@ -135,5 +146,18 @@ Thematic-break rendering:
 - `insertHtml` doesn't trip the OOXML-styles-clobbering problem the
   way `insertOoxml` does; it's character/range-level, not package-level.
 
-After M3: tables (M4), style-mapping UI (M5),
-images/footnotes/math (M6), polish + distribution (M7).
+Table rendering:
+- `applyTable` inserts the Word table BEFORE the empty anchor
+  paragraph that the loop already created, then sets
+  `state.paragraphIsEmpty = true` so `nextParagraph` reuses the anchor
+  for whatever follows. No extra blank lines around tables.
+- Per-cell formatting: alignment is set once at the cell level
+  (`cell.horizontalAlignment`); inline marks reuse `formatRange` which
+  is shared with the non-table run path.
+- Header bolding is forced via `formatRange(range, run, isHeader)` —
+  one extra bool, no extra style indirection. If we ever want a
+  proper "Header Row" style binding instead, that's a per-cell
+  styleBuiltIn change in `applyCell`.
+
+After M4: style-mapping UI (M5), images/footnotes/math (M6), polish
++ distribution (M7).

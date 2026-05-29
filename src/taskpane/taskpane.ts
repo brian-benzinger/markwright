@@ -1,4 +1,4 @@
-import { parseMarkdown, type Block, type Run } from "../convert";
+import { parseMarkdown, type Alignment, type Block, type Run } from "../convert";
 
 Office.onReady((info) => {
   if (info.host !== Office.HostType.Word) {
@@ -47,10 +47,11 @@ async function onConvert(): Promise<void> {
       // through nextParagraph, so the original cursor sits at the end of
       // the inserted content when we're done.
       selection.insertText("", Word.InsertLocation.replace);
-      const state: ListState = {
+      const state: RenderState = {
         currentList: null,
         currentListId: 0,
         configuredLevels: new Map(),
+        paragraphIsEmpty: false,
       };
 
       let para = selection.insertParagraph("", Word.InsertLocation.before);
@@ -68,15 +69,24 @@ async function onConvert(): Promise<void> {
   }
 }
 
-type ListState = {
+type RenderState = {
   currentList: Word.List | null;
   currentListId: number;
   configuredLevels: Map<number, Set<number>>;
+  // True when the active paragraph reference is empty and should be
+  // reused for the next block. Set by table application — Word's
+  // paragraph.insertTable can only insert Before/After, so we anchor
+  // the table to an empty paragraph and reuse it for whatever follows.
+  paragraphIsEmpty: boolean;
 };
 
 // Returns the paragraph the next block should land in, and updates the
 // list state when we cross a list boundary.
-function nextParagraph(prev: Word.Paragraph, block: Block, state: ListState): Word.Paragraph {
+function nextParagraph(prev: Word.Paragraph, block: Block, state: RenderState): Word.Paragraph {
+  if (state.paragraphIsEmpty) {
+    state.paragraphIsEmpty = false;
+    return prev;
+  }
   if (
     block.kind === "listItem" &&
     state.currentList !== null &&
@@ -92,7 +102,7 @@ function nextParagraph(prev: Word.Paragraph, block: Block, state: ListState): Wo
   return next;
 }
 
-function applyBlock(paragraph: Word.Paragraph, block: Block, state: ListState): void {
+function applyBlock(paragraph: Word.Paragraph, block: Block, state: RenderState): void {
   if (block.kind === "thematicBreak") {
     // Word interprets <hr/> as a bottom-bordered paragraph — the
     // conventional thematic-break representation. insertHtml on the
@@ -110,6 +120,10 @@ function applyBlock(paragraph: Word.Paragraph, block: Block, state: ListState): 
     if (text === "") return;
     const range = paragraph.insertText(text, Word.InsertLocation.end);
     range.font.name = "Consolas";
+    return;
+  }
+  if (block.kind === "table") {
+    applyTable(paragraph, block, state);
     return;
   }
   if (block.kind === "listItem") {
@@ -142,7 +156,58 @@ function applyBlock(paragraph: Word.Paragraph, block: Block, state: ListState): 
   }
 }
 
-function configureListLevel(state: ListState, depth: number, ordered: boolean): void {
+function applyTable(
+  anchor: Word.Paragraph,
+  block: Block & { kind: "table" },
+  state: RenderState
+): void {
+  const colCount = block.alignments.length;
+  const rowCount = 1 + block.rows.length;
+  // Insert the table BEFORE our empty anchor paragraph so the anchor
+  // survives below the table. nextParagraph reuses the anchor on the
+  // following block (paragraphIsEmpty flag).
+  const table = anchor.insertTable(rowCount, colCount, Word.InsertLocation.before);
+  for (let c = 0; c < colCount; c++) {
+    applyCell(table.getCell(0, c), block.header[c] ?? [], block.alignments[c], true);
+  }
+  for (let r = 0; r < block.rows.length; r++) {
+    for (let c = 0; c < colCount; c++) {
+      applyCell(table.getCell(r + 1, c), block.rows[r][c] ?? [], block.alignments[c], false);
+    }
+  }
+  // A table breaks any active list scope; the anchor remains empty for
+  // the next block to fill in.
+  state.currentList = null;
+  state.currentListId = 0;
+  state.paragraphIsEmpty = true;
+}
+
+function applyCell(
+  cell: Word.TableCell,
+  runs: Run[],
+  alignment: Alignment,
+  isHeader: boolean
+): void {
+  cell.horizontalAlignment = alignToWord(alignment);
+  const cellPara = cell.body.paragraphs.getFirst();
+  for (const run of runs) {
+    const range = cellPara.insertText(run.text, Word.InsertLocation.end);
+    formatRange(range, run, isHeader);
+  }
+}
+
+function alignToWord(a: Alignment): Word.Alignment {
+  switch (a) {
+    case "left":
+      return Word.Alignment.left;
+    case "center":
+      return Word.Alignment.centered;
+    case "right":
+      return Word.Alignment.right;
+  }
+}
+
+function configureListLevel(state: RenderState, depth: number, ordered: boolean): void {
   if (state.currentList === null) return;
   let levels = state.configuredLevels.get(state.currentListId);
   if (!levels) {
@@ -160,7 +225,11 @@ function configureListLevel(state: ListState, depth: number, ordered: boolean): 
 
 function applyRun(paragraph: Word.Paragraph, run: Run): void {
   const range = paragraph.insertText(run.text, Word.InsertLocation.end);
-  if (run.bold) range.font.bold = true;
+  formatRange(range, run, false);
+}
+
+function formatRange(range: Word.Range, run: Run, forceBold: boolean): void {
+  if (run.bold || forceBold) range.font.bold = true;
   if (run.italic) range.font.italic = true;
   if (run.strike) range.font.strikeThrough = true;
   // Word has no built-in "code" character style; fall back to a monospace font.

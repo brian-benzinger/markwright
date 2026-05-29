@@ -34,9 +34,13 @@ marks and lists bind to the host document's own styles.
   lists) — rendered with `☐` / `☑` prepended to the run text
 - GFM **bare-URL autolinks** (`https://x` in flowing text becomes a
   hyperlink)
+- GFM **tables** with per-column alignment (`:---`, `:---:`, `---:`),
+  inline marks inside cells, and bold header rows — rendered via
+  `paragraph.insertTable` against an empty anchor that we reuse for
+  the next block
 
-**Not yet** — tables, images, footnotes, math, the style-mapping UI,
-and the OOXML fast path for bulk insertion.
+**Not yet** — images, footnotes, math, the style-mapping UI, and the
+OOXML fast path for bulk insertion.
 
 ## Prerequisites
 
@@ -121,6 +125,8 @@ Block[]   ← stable seam between parsing and host integration
      │  │ listItem   { ordered, depth, listId, runs, checked? }   │
      │  │ codeBlock  { content: string, language? }                │
      │  │ thematicBreak  {}                                        │
+     │  │ table      { header: Run[][], rows: Run[][][],           │
+     │  │              alignments: Alignment[] }                   │
      │  │ Run        { text, bold?, italic?, strike?, code?, link? }│
      │  └──────────────────────────────────────────────────────────┘
      ▼
@@ -130,6 +136,7 @@ Office.js (Word object model)
      range.hyperlink
      paragraph.startNewList() + setLevelBullet/Numbering + listItem.level
      paragraph.insertHtml("<hr/>", Replace)  for thematic breaks
+     paragraph.insertTable(rows, cols, Before) + cell.body + horizontalAlignment
 ```
 
 The Block AST is the load-bearing abstraction. An earlier attempt (`pivot to
