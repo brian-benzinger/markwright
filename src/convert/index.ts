@@ -10,6 +10,8 @@ export type Run = {
   link?: string;
 };
 
+export type Alignment = "left" | "center" | "right";
+
 export type Block =
   | { kind: "paragraph"; runs: Run[]; quoteDepth?: number }
   | { kind: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; runs: Run[] }
@@ -22,7 +24,13 @@ export type Block =
       checked?: boolean;
     }
   | { kind: "codeBlock"; content: string; language?: string }
-  | { kind: "thematicBreak" };
+  | { kind: "thematicBreak" }
+  | {
+      kind: "table";
+      header: Run[][];
+      rows: Run[][][];
+      alignments: Alignment[];
+    };
 
 // linkify converts bare URLs (https://example.com) into link tokens with
 // the same shape as [label](href), so the existing flattenInline link
@@ -44,9 +52,61 @@ export function parseMarkdown(source: string): Block[] {
   const listStack: Array<{ ordered: boolean }> = [];
   let listIdCounter = 0;
   let currentListId = 0;
+  // Tables don't nest in GFM and we only support them at the top level
+  // (inside a list or blockquote they're dropped). One mutable context
+  // is enough to accumulate cells across the table_open..table_close
+  // span.
+  let tableCtx: TableContext | null = null;
 
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
+
+    if (tableCtx) {
+      // While inside a table, only table-internal tokens are meaningful;
+      // everything else is skipped until table_close.
+      if (t.type === "table_close") {
+        blocks.push({
+          kind: "table",
+          header: tableCtx.header,
+          rows: tableCtx.rows,
+          alignments: tableCtx.alignments,
+        });
+        tableCtx = null;
+        continue;
+      }
+      if (t.type === "thead_open") {
+        tableCtx.inHeader = true;
+      } else if (t.type === "thead_close") {
+        tableCtx.inHeader = false;
+      } else if (t.type === "tr_open") {
+        tableCtx.currentRow = [];
+      } else if (t.type === "tr_close") {
+        if (tableCtx.inHeader) {
+          tableCtx.header = tableCtx.currentRow;
+        } else {
+          tableCtx.rows.push(tableCtx.currentRow);
+        }
+      } else if (t.type === "th_open" || t.type === "td_open") {
+        if (tableCtx.inHeader) {
+          tableCtx.alignments.push(cellAlignment(t));
+        }
+      } else if (t.type === "inline") {
+        tableCtx.currentRow.push(flattenInline(t));
+      }
+      // tbody_open, tbody_close, th_close, td_close — fall through.
+      continue;
+    }
+
+    if (t.type === "table_open" && blockquoteDepth === 0 && listStack.length === 0) {
+      tableCtx = {
+        header: [],
+        rows: [],
+        alignments: [],
+        inHeader: false,
+        currentRow: [],
+      };
+      continue;
+    }
 
     if (t.type === "blockquote_open") {
       blockquoteDepth++;
@@ -119,6 +179,23 @@ export function parseMarkdown(source: string): Block[] {
     }
   }
   return blocks;
+}
+
+type TableContext = {
+  header: Run[][];
+  rows: Run[][][];
+  alignments: Alignment[];
+  inHeader: boolean;
+  currentRow: Run[][];
+};
+
+function cellAlignment(token: Token): Alignment {
+  // markdown-it serialises divider colons as a `text-align:...` style
+  // attribute on each th/td. Default (no colon, no style) is left.
+  const style = token.attrGet("style");
+  if (style?.includes("text-align:center")) return "center";
+  if (style?.includes("text-align:right")) return "right";
+  return "left";
 }
 
 function listItemBlock(

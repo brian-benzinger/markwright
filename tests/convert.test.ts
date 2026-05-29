@@ -577,3 +577,76 @@ describe("parseMarkdown — blockquotes", () => {
     ]);
   });
 });
+
+describe("parseMarkdown — tables", () => {
+  it("parses a simple table with default left alignment", () => {
+    const src = "| H1 | H2 |\n| --- | --- |\n| a | b |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "H1" }], [{ text: "H2" }]],
+        rows: [[[{ text: "a" }], [{ text: "b" }]]],
+        alignments: ["left", "left"],
+      },
+    ]);
+  });
+
+  it("captures per-column alignment from the divider row", () => {
+    const src = "| L | C | R |\n| :--- | :---: | ---: |\n| a | b | c |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "L" }], [{ text: "C" }], [{ text: "R" }]],
+        rows: [[[{ text: "a" }], [{ text: "b" }], [{ text: "c" }]]],
+        alignments: ["left", "center", "right"],
+      },
+    ]);
+  });
+
+  it("preserves inline marks inside cells", () => {
+    const src = "| Plain | Styled |\n| --- | --- |\n| a | **b** `c` |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "Plain" }], [{ text: "Styled" }]],
+        rows: [
+          [[{ text: "a" }], [{ text: "b", bold: true }, { text: " " }, { text: "c", code: true }]],
+        ],
+        alignments: ["left", "left"],
+      },
+    ]);
+  });
+
+  it("handles multiple body rows", () => {
+    const src = "| H |\n| --- |\n| a |\n| b |\n| c |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "H" }]],
+        rows: [[[{ text: "a" }]], [[{ text: "b" }]], [[{ text: "c" }]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
+
+  it("interleaves a table with surrounding blocks", () => {
+    const src = "before\n\n| H |\n| --- |\n| x |\n\nafter";
+    const out = parseMarkdown(src);
+    expect(out.map((b) => b.kind)).toEqual(["paragraph", "table", "paragraph"]);
+  });
+
+  it("drops a table nested inside a blockquote (lossy)", () => {
+    // Same lossy stance as code blocks / hr inside blockquotes —
+    // table tokens fall through the inside-blockquote branch.
+    const src = "> | H |\n> | --- |\n> | x |";
+    expect(parseMarkdown(src)).toEqual([]);
+  });
+
+  it("drops a table nested inside a list (lossy)", () => {
+    // The list_open guard keeps the table branch inert; the table
+    // tokens drift through and produce nothing.
+    const src = "- item\n  | H |\n  | --- |\n  | x |";
+    const out = parseMarkdown(src);
+    expect(out.some((b) => b.kind === "table")).toBe(false);
+  });
+});
