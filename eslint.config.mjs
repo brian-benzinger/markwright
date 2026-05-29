@@ -18,8 +18,19 @@ export default [
         Word: "readonly",
       },
     },
+    rules: {
+      // Semantic TS rules — formatting stays Prettier's job.
+      // @typescript-eslint is already registered via office-addins/recommended.
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        { prefer: "type-imports", fixStyle: "inline-type-imports" },
+      ],
+      "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/no-inferrable-types": "error",
+    },
   },
   {
-    ignores: ["dist/**", "node_modules/**"],
+    ignores: ["dist/**", "node_modules/**", "coverage*/**"],
   },
 ];

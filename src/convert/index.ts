@@ -26,12 +26,12 @@ const md = new MarkdownIt({ html: false, linkify: false, typographer: false });
 export function parseMarkdown(source: string): Block[] {
   const tokens = md.parse(source, {});
   const blocks: Block[] = [];
-  // Blockquotes aren't supported yet; suppress their contents until they
-  // ship rather than emitting bare paragraphs that lose the quote semantics.
+  // Blockquotes aren't supported yet; suppress their contents rather than
+  // emitting bare paragraphs that would lose the quote semantics.
   let blockquoteDepth = 0;
-  // listStack tracks ordered-ness per nesting level. listId is a synthetic
-  // counter that groups every item in one top-level Markdown list (including
-  // its nested sub-lists) so the applier knows when to start a fresh
+  // listStack tracks ordered-ness per nesting level; listId is a synthetic
+  // counter that groups every item in one top-level Markdown list scope
+  // (including nested sub-lists) so the applier knows when to start a fresh
   // Word.List vs. continue an existing one.
   const listStack: Array<{ ordered: boolean }> = [];
   let listIdCounter = 0;
@@ -64,105 +64,106 @@ export function parseMarkdown(source: string): Block[] {
     }
     if (t.type === "list_item_open" || t.type === "list_item_close") continue;
 
-    if (t.type === "heading_open") {
+    if (t.type === "heading_open" || t.type === "paragraph_open") {
       const runs = flattenInline(tokens[i + 1]);
-      if (runs.length > 0) {
+      // Skip the inline token (i+1) and the matching _close (i+2); the
+      // for-loop's i++ takes us past the close.
+      i += 2;
+      if (runs.length === 0) continue;
+      if (t.type === "heading_open") {
         blocks.push({ kind: "heading", level: headingLevel(t.tag), runs });
+      } else if (listStack.length > 0) {
+        blocks.push(listItemBlock(listStack, currentListId, runs));
+      } else {
+        blocks.push({ kind: "paragraph", runs });
       }
-      i += 2;
-    } else if (t.type === "paragraph_open") {
-      const runs = flattenInline(tokens[i + 1]);
-      if (runs.length > 0) {
-        if (listStack.length > 0) {
-          const top = listStack[listStack.length - 1];
-          blocks.push({
-            kind: "listItem",
-            ordered: top.ordered,
-            depth: listStack.length - 1,
-            listId: currentListId,
-            runs,
-          });
-        } else {
-          blocks.push({ kind: "paragraph", runs });
-        }
-      }
-      i += 2;
     }
   }
   return blocks;
 }
 
+function listItemBlock(
+  stack: Array<{ ordered: boolean }>,
+  listId: number,
+  runs: Run[],
+): Block {
+  return {
+    kind: "listItem",
+    ordered: stack[stack.length - 1].ordered,
+    depth: stack.length - 1,
+    listId,
+    runs,
+  };
+}
+
+type InlineState = {
+  boldDepth: number;
+  italicDepth: number;
+  strikeDepth: number;
+  link: string | undefined;
+};
+
 function flattenInline(token: Token | undefined): Run[] {
   if (!token || token.type !== "inline") return [];
   const out: Run[] = [];
-  let bold = 0;
-  let italic = 0;
-  let strike = 0;
-  let link: string | undefined;
+  const s: InlineState = {
+    boldDepth: 0,
+    italicDepth: 0,
+    strikeDepth: 0,
+    link: undefined,
+  };
 
   for (const child of token.children ?? []) {
     switch (child.type) {
       case "text":
-        if (child.content) {
-          pushRun(
-            out,
-            makeRun(child.content, bold, italic, strike, false, link),
-          );
-        }
+        if (child.content) pushRun(out, makeRun(child.content, s));
         break;
       case "code_inline":
-        pushRun(out, makeRun(child.content, bold, italic, strike, true, link));
+        pushRun(out, makeRun(child.content, s, true));
         break;
       case "strong_open":
-        bold++;
+        s.boldDepth++;
         break;
       case "strong_close":
-        bold--;
+        s.boldDepth--;
         break;
       case "em_open":
-        italic++;
+        s.italicDepth++;
         break;
       case "em_close":
-        italic--;
+        s.italicDepth--;
         break;
       case "s_open":
-        strike++;
+        s.strikeDepth++;
         break;
       case "s_close":
-        strike--;
+        s.strikeDepth--;
         break;
       case "link_open":
-        link = child.attrGet("href") ?? undefined;
+        s.link = child.attrGet("href") ?? undefined;
         break;
       case "link_close":
-        link = undefined;
+        s.link = undefined;
         break;
       case "softbreak":
-        pushRun(out, makeRun(" ", bold, italic, strike, false, link));
+        pushRun(out, makeRun(" ", s));
         break;
       case "hardbreak":
         // U+000B is Word's in-paragraph line break.
-        pushRun(out, makeRun("\v", bold, italic, strike, false, link));
+        pushRun(out, makeRun("\v", s));
         break;
     }
   }
   return out;
 }
 
-function makeRun(
-  text: string,
-  bold: number,
-  italic: number,
-  strike: number,
-  code: boolean,
-  link: string | undefined,
-): Run {
+function makeRun(text: string, s: InlineState, code = false): Run {
   const run: Run = { text };
-  if (bold > 0) run.bold = true;
-  if (italic > 0) run.italic = true;
-  if (strike > 0) run.strike = true;
+  if (s.boldDepth > 0) run.bold = true;
+  if (s.italicDepth > 0) run.italic = true;
+  if (s.strikeDepth > 0) run.strike = true;
   if (code) run.code = true;
-  if (link) run.link = link;
+  if (s.link) run.link = s.link;
   return run;
 }
 

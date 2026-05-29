@@ -51,11 +51,16 @@ server can serve HTTPS — Word refuses to load add-ins over plain HTTP.
 ```bash
 npm run typecheck   # tsc --noEmit
 npm run lint        # office-addin-lint (ESLint + Prettier)
+npm run lint:fix    # auto-fix formatting and trivially-fixable lint
 npm test            # vitest run --coverage
 npm run build       # production webpack build
 ```
 
-All four also run in CI on every PR via `.github/workflows/ci.yml`.
+All four (typecheck, lint, test, build) also run in CI on every PR via
+`.github/workflows/ci.yml`. The lint config extends `office-addin-lint`
+and additionally enforces `no-explicit-any`, `consistent-type-imports`,
+`no-non-null-assertion`, and `no-inferrable-types` (`eslint.config.mjs`)
+— Prettier remains the only source of formatting rules.
 
 ### Coverage
 
@@ -78,9 +83,10 @@ markdown text
      │
      ▼
 markdown-it tokens
-     │  parseMarkdown() walks tokens, flattens inline children into
-     │  Run[] with mark-depth tracking, and groups list items by a
-     │  synthetic listId.
+     │  parseMarkdown() walks tokens, dispatches heading/paragraph/
+     │  list-item, and lets flattenInline() collapse inline children
+     │  into Run[] with a shared InlineState (mark depths + link). List
+     │  items get a synthetic listId per top-level Markdown scope.
      ▼
 Block[]   ← stable seam between parsing and host integration
      │  ┌──────────────────────────────────────────────────────────┐

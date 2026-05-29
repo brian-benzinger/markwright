@@ -12,6 +12,16 @@ inline-level), teach `parseMarkdown` to emit it, teach `applyBlock`
 in `src/taskpane/taskpane.ts` to render it. Tests live in
 `tests/convert.test.ts` and stay pure — they never touch Office.js.
 
+A few patterns that recur in the applier:
+
+- `nextParagraph(prev, block, state)` decides where the next paragraph
+  lands and updates list state on boundary crossings. The main loop
+  stays a two-liner: `para = nextParagraph(...); applyBlock(...)`.
+- Inline state inside `flattenInline` is a single `InlineState` struct
+  (bold/italic/strike depths + current link). `makeRun(text, state, code?)`
+  is the only constructor — if you find yourself passing 4+ positional
+  flags, rebuild it on top of the struct.
+
 ## Office.js gotchas
 
 - `Range.insertParagraph` accepts only `Before`/`After`/`Start`/`End`,
@@ -61,7 +71,12 @@ for `insertOoxml` again unless you're shipping tables/images/footnotes
 - Run all four gates locally before push:
   `npm run typecheck && npm run lint && npm test && npm run build`.
   CI runs the same set.
-- `npm run lint:fix` cleans up Prettier nits.
+- `npm run lint:fix` cleans up Prettier nits and auto-fixable lint.
+- Lint config (`eslint.config.mjs`) extends `office-addin-lint` and
+  layers strict semantic rules on top: `no-explicit-any`,
+  `consistent-type-imports` (inline-type-imports style),
+  `no-non-null-assertion`, `no-inferrable-types`. Prettier still owns
+  every formatting decision — don't add format rules to ESLint.
 - Coverage gate runs in `npm test` via `vitest run --coverage`. Only
   `src/convert/` is in scope — the Office.js applier can't execute
   under vitest because the `Word` global only exists in the host.

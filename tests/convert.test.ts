@@ -39,6 +39,9 @@ describe("parseMarkdown — block shape", () => {
   });
 
   it("preserves XML special characters verbatim", () => {
+    // The Office.js applier takes raw strings, so we don't escape `&`, `<`,
+    // `>` in the parser. If we ever ship an OOXML emitter (for tables /
+    // images / footnotes), that path will need to escape on its own.
     expect(parseMarkdown("a & b < c > d")).toEqual([
       { kind: "paragraph", runs: [{ text: "a & b < c > d" }] },
     ]);
@@ -161,6 +164,28 @@ describe("parseMarkdown — inline marks", () => {
     // (text, space, text) — they should collapse into one.
     expect(parseMarkdown("**one\ntwo**")).toEqual([
       { kind: "paragraph", runs: [{ text: "one two", bold: true }] },
+    ]);
+  });
+
+  it("composes bold and inline code in a single run", () => {
+    expect(parseMarkdown("**bold `code` bold**")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          { text: "bold ", bold: true },
+          { text: "code", bold: true, code: true },
+          { text: " bold", bold: true },
+        ],
+      },
+    ]);
+  });
+
+  it("composes a link and bold into a single bold-link run", () => {
+    expect(parseMarkdown("[**bold link**](https://x)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "bold link", bold: true, link: "https://x" }],
+      },
     ]);
   });
 });

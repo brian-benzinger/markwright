@@ -12,9 +12,7 @@ Office.onReady((info) => {
 });
 
 function show(id: string): void {
-  for (const el of document.querySelectorAll<HTMLElement>(
-    "body > [hidden], body > :not([hidden])",
-  )) {
+  for (const el of document.querySelectorAll<HTMLElement>("body > *")) {
     el.hidden = el.id !== id;
   }
 }
@@ -48,35 +46,19 @@ async function onConvert(): Promise<void> {
       const selection = context.document.getSelection();
       // Clear any selected text, then insert the first block as a new
       // paragraph immediately before the cursor. Subsequent blocks chain
-      // after that paragraph, so the original cursor position is preserved
-      // at the end of the inserted content.
+      // through nextParagraph, so the original cursor sits at the end of
+      // the inserted content when we're done.
       selection.insertText("", Word.InsertLocation.replace);
-      let para = selection.insertParagraph("", Word.InsertLocation.before);
-      // Tracks the active Word.List so consecutive listItem blocks sharing
-      // the same listId continue numbering instead of restarting; the
-      // configuredLevels map memoises setLevelBullet/Numbering per list so
-      // we only run them once per level.
       const state: ListState = {
         currentList: null,
         currentListId: 0,
         configuredLevels: new Map(),
       };
 
+      let para = selection.insertParagraph("", Word.InsertLocation.before);
       applyBlock(para, blocks[0], state);
       for (let i = 1; i < blocks.length; i++) {
-        if (
-          blocks[i].kind === "listItem" &&
-          state.currentList !== null &&
-          (blocks[i] as { listId: number }).listId === state.currentListId
-        ) {
-          para = state.currentList.insertParagraph("", Word.InsertLocation.end);
-        } else {
-          para = para.insertParagraph("", Word.InsertLocation.after);
-          if (blocks[i].kind !== "listItem") {
-            state.currentList = null;
-            state.currentListId = 0;
-          }
-        }
+        para = nextParagraph(para, blocks[i], state);
         applyBlock(para, blocks[i], state);
       }
       await context.sync();
@@ -93,6 +75,28 @@ type ListState = {
   currentListId: number;
   configuredLevels: Map<number, Set<number>>;
 };
+
+// Returns the paragraph the next block should land in, and updates the
+// list state when we cross a list boundary.
+function nextParagraph(
+  prev: Word.Paragraph,
+  block: Block,
+  state: ListState,
+): Word.Paragraph {
+  if (
+    block.kind === "listItem" &&
+    state.currentList !== null &&
+    block.listId === state.currentListId
+  ) {
+    return state.currentList.insertParagraph("", Word.InsertLocation.end);
+  }
+  const next = prev.insertParagraph("", Word.InsertLocation.after);
+  if (block.kind !== "listItem") {
+    state.currentList = null;
+    state.currentListId = 0;
+  }
+  return next;
+}
 
 function applyBlock(
   paragraph: Word.Paragraph,
@@ -143,7 +147,7 @@ function applyRun(paragraph: Word.Paragraph, run: Run): void {
   if (run.bold) range.font.bold = true;
   if (run.italic) range.font.italic = true;
   if (run.strike) range.font.strikeThrough = true;
-  // Word lacks a built-in "code" character style; apply a monospace font directly.
+  // Word has no built-in "code" character style; fall back to a monospace font.
   if (run.code) range.font.name = "Consolas";
   if (run.link) range.hyperlink = run.link;
 }
