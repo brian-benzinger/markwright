@@ -98,11 +98,7 @@ describe("parseMarkdown — inline marks", () => {
     expect(parseMarkdown("call `foo()` now")).toEqual([
       {
         kind: "paragraph",
-        runs: [
-          { text: "call " },
-          { text: "foo()", code: true },
-          { text: " now" },
-        ],
+        runs: [{ text: "call " }, { text: "foo()", code: true }, { text: " now" }],
       },
     ]);
   });
@@ -111,10 +107,7 @@ describe("parseMarkdown — inline marks", () => {
     expect(parseMarkdown("see [docs](https://example.com)")).toEqual([
       {
         kind: "paragraph",
-        runs: [
-          { text: "see " },
-          { text: "docs", link: "https://example.com" },
-        ],
+        runs: [{ text: "see " }, { text: "docs", link: "https://example.com" }],
       },
     ]);
   });
@@ -123,10 +116,7 @@ describe("parseMarkdown — inline marks", () => {
     expect(parseMarkdown("at <https://example.com>")).toEqual([
       {
         kind: "paragraph",
-        runs: [
-          { text: "at " },
-          { text: "https://example.com", link: "https://example.com" },
-        ],
+        runs: [{ text: "at " }, { text: "https://example.com", link: "https://example.com" }],
       },
     ]);
   });
@@ -291,23 +281,14 @@ describe("parseMarkdown — lists", () => {
         ordered: false,
         depth: 0,
         listId: 1,
-        runs: [
-          { text: "a " },
-          { text: "bold", bold: true },
-          { text: " item" },
-        ],
+        runs: [{ text: "a " }, { text: "bold", bold: true }, { text: " item" }],
       },
     ]);
   });
 
   it("interleaves headings and lists without dropping order", () => {
     const out = parseMarkdown("# H\n\n- a\n\np\n\n1. one");
-    expect(out.map((b) => b.kind)).toEqual([
-      "heading",
-      "listItem",
-      "paragraph",
-      "listItem",
-    ]);
+    expect(out.map((b) => b.kind)).toEqual(["heading", "listItem", "paragraph", "listItem"]);
   });
 });
 
@@ -376,9 +357,7 @@ describe("parseMarkdown — code blocks", () => {
   });
 
   it("treats an empty fence as an empty code block (no language)", () => {
-    expect(parseMarkdown("```\n```")).toEqual([
-      { kind: "codeBlock", content: "" },
-    ]);
+    expect(parseMarkdown("```\n```")).toEqual([{ kind: "codeBlock", content: "" }]);
   });
 
   it("interleaves a code block between paragraphs", () => {
@@ -441,11 +420,7 @@ describe("parseMarkdown — blockquotes", () => {
     expect(parseMarkdown("> a **bold** quote")).toEqual([
       {
         kind: "paragraph",
-        runs: [
-          { text: "a " },
-          { text: "bold", bold: true },
-          { text: " quote" },
-        ],
+        runs: [{ text: "a " }, { text: "bold", bold: true }, { text: " quote" }],
         quoteDepth: 1,
       },
     ]);

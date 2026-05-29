@@ -25,9 +25,7 @@ function setStatus(message: string, kind: "info" | "error" = "info"): void {
 }
 
 async function onConvert(): Promise<void> {
-  const input = document.getElementById(
-    "markdown-input",
-  ) as HTMLTextAreaElement;
+  const input = document.getElementById("markdown-input") as HTMLTextAreaElement;
   const markdown = input.value;
   if (!markdown.trim()) {
     setStatus("Nothing to convert.", "error");
@@ -78,11 +76,7 @@ type ListState = {
 
 // Returns the paragraph the next block should land in, and updates the
 // list state when we cross a list boundary.
-function nextParagraph(
-  prev: Word.Paragraph,
-  block: Block,
-  state: ListState,
-): Word.Paragraph {
+function nextParagraph(prev: Word.Paragraph, block: Block, state: ListState): Word.Paragraph {
   if (
     block.kind === "listItem" &&
     state.currentList !== null &&
@@ -98,11 +92,7 @@ function nextParagraph(
   return next;
 }
 
-function applyBlock(
-  paragraph: Word.Paragraph,
-  block: Block,
-  state: ListState,
-): void {
+function applyBlock(paragraph: Word.Paragraph, block: Block, state: ListState): void {
   if (block.kind === "thematicBreak") {
     // Word interprets <hr/> as a bottom-bordered paragraph — the
     // conventional thematic-break representation. insertHtml on the
@@ -138,20 +128,14 @@ function applyBlock(
     // for the common single-depth case.
   } else {
     paragraph.styleBuiltIn =
-      block.kind === "heading"
-        ? headingStyle(block.level)
-        : Word.BuiltInStyleName.normal;
+      block.kind === "heading" ? headingStyle(block.level) : Word.BuiltInStyleName.normal;
   }
   for (const run of block.runs) {
     applyRun(paragraph, run);
   }
 }
 
-function configureListLevel(
-  state: ListState,
-  depth: number,
-  ordered: boolean,
-): void {
+function configureListLevel(state: ListState, depth: number, ordered: boolean): void {
   if (state.currentList === null) return;
   let levels = state.configuredLevels.get(state.currentListId);
   if (!levels) {

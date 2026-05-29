@@ -82,8 +82,7 @@ export function parseMarkdown(source: string): Block[] {
     if (t.type === "list_item_open" || t.type === "list_item_close") continue;
 
     if (t.type === "fence" || t.type === "code_block") {
-      const language =
-        t.type === "fence" && t.info.trim() ? t.info.trim() : undefined;
+      const language = t.type === "fence" && t.info.trim() ? t.info.trim() : undefined;
       blocks.push({ kind: "codeBlock", content: t.content, language });
       continue;
     }
@@ -111,11 +110,7 @@ export function parseMarkdown(source: string): Block[] {
   return blocks;
 }
 
-function listItemBlock(
-  stack: Array<{ ordered: boolean }>,
-  listId: number,
-  runs: Run[],
-): Block {
+function listItemBlock(stack: Array<{ ordered: boolean }>, listId: number, runs: Run[]): Block {
   return {
     kind: "listItem",
     ordered: stack[stack.length - 1].ordered,
