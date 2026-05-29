@@ -14,7 +14,9 @@ async function getHttpsOptions() {
 module.exports = async (env, options) => {
   const dev = options.mode === "development";
   return {
-    devtool: "source-map",
+    // Sourcemaps in dev only — they more than triple the production
+    // payload that ships to the Word host.
+    devtool: dev ? "source-map" : false,
     entry: {
       taskpane: "./src/taskpane/taskpane.ts",
       commands: "./src/commands/commands.ts",
