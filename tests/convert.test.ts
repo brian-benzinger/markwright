@@ -285,3 +285,25 @@ describe("parseMarkdown — lists", () => {
     ]);
   });
 });
+
+describe("parseMarkdown — blockquotes (M3 placeholder)", () => {
+  // Blockquotes aren't implemented yet; until they are, their contents
+  // are dropped rather than emitted as bare paragraphs that lose the
+  // quote semantics. These tests pin that behavior so the gap is visible.
+  it("suppresses contents nested inside a blockquote", () => {
+    expect(parseMarkdown("> quoted line")).toEqual([]);
+  });
+
+  it("suppresses blockquote contents but keeps surrounding blocks in order", () => {
+    expect(parseMarkdown("before\n\n> quoted\n\nafter")).toEqual([
+      { kind: "paragraph", runs: [{ text: "before" }] },
+      { kind: "paragraph", runs: [{ text: "after" }] },
+    ]);
+  });
+
+  it("suppresses contents of nested blockquotes", () => {
+    expect(parseMarkdown("> outer\n>\n> > inner\n\nresumed")).toEqual([
+      { kind: "paragraph", runs: [{ text: "resumed" }] },
+    ]);
+  });
+});

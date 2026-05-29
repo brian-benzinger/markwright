@@ -186,20 +186,6 @@ function sameFormat(a: Run, b: Run): boolean {
 }
 
 function headingLevel(tag: string): 1 | 2 | 3 | 4 | 5 | 6 {
-  switch (tag) {
-    case "h1":
-      return 1;
-    case "h2":
-      return 2;
-    case "h3":
-      return 3;
-    case "h4":
-      return 4;
-    case "h5":
-      return 5;
-    case "h6":
-      return 6;
-    default:
-      return 1;
-  }
+  // markdown-it heading_open tokens always carry tag "h1".."h6".
+  return Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6;
 }
