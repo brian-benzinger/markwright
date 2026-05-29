@@ -113,6 +113,12 @@ function applyBlock(paragraph: Word.Paragraph, block: Block, state: RenderState)
     }
   } else if (block.kind === "paragraph" && block.quoteDepth) {
     paragraph.styleBuiltIn = Word.BuiltInStyleName.quote;
+    // Word's default Quote style is centered in most themes, which
+    // fights the Markdown convention of left-aligned indented quote
+    // text. Force left alignment; users who want their template's
+    // centered Quote behaviour can override via the future style-
+    // mapping UI (M5).
+    paragraph.alignment = Word.Alignment.left;
     // TODO: visually scale indent for quoteDepth > 1. Word's Quote style
     // sets its own left indent; layering an additive override needs a
     // load+sync of the style's defaults first, which we'd rather not pay
