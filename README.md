@@ -6,57 +6,42 @@ A cross-platform Word add-in (Windows, Mac, web) that pastes markdown into the
 active document and maps it onto that document's own styles. Built on
 Office.js + TypeScript.
 
-## Status
+## Install
 
-**Basic Markdown is complete.** The task pane parses markdown into a
-small `Block` AST and writes it into the document via the Word object
-model (`paragraph.styleBuiltIn`, `range.font.*`, `paragraph.startNewList()`,
-`paragraph.insertTable`, `paragraph.insertHtml` for `<hr>` and `<img>`),
-so every CommonMark + GFM construct binds to the host document's own
-styles. Next milestones: style binding UI (M5), then stretch
-(footnotes, math).
-
-**Supported — full CommonMark + GFM:**
-
-- Paragraphs
-- Headings (ATX `#`..`######` *and* Setext `===` / `---`) — bind to Word's
-  built-in Heading 1–6 styles
-- Inline: `**bold**`, `*italic*` / `_italic_`, `~~strike~~`, `` `inline code` ``
-  (monospace font), `[label](url)`, autolinks `<https://…>`, bare-URL
-  autolinks, reference-style links (`[label][ref]` + `[ref]: url`), hard
-  line breaks (two trailing spaces), backslash escapes, named and numeric
-  HTML entities
-- Bullet lists, ordered lists, mixed nested lists (continuous numbering per
-  Markdown list scope)
-- Blockquotes (bind to Word's "Quote" style; nesting tracked in the AST as
-  `quoteDepth` though depth-2+ doesn't visually scale indent yet)
-- Fenced code blocks (` ``` `, with language tag captured) and 4-space
-  indented code blocks — rendered as one monospaced (Consolas) Word
-  paragraph with `\v` line breaks so the snippet stays one block
-- Thematic breaks (`---`, `***`, `___`) — rendered via
-  `paragraph.insertHtml("<hr/>", Replace)`, which Word interprets as a
-  bottom-bordered paragraph
-- GFM **task lists** (`- [ ]`, `- [x]`, `- [X]`, including in ordered
-  lists) — rendered with `☐` / `☑` prepended to the run text
-- GFM **tables** with per-column alignment (`:---`, `:---:`, `---:`),
-  inline marks inside cells, and bold header rows — rendered via
-  `paragraph.insertTable` against an empty anchor that we reuse for
-  the next block
-- **Images** (`![alt](src)`, reference-style `![alt][ref]`, optional
-  `"title"`) — rendered as `<img>` via `paragraph.insertHtml`, so Word's
-  HTML paste pipeline fetches the URL. Data URIs work directly; if the
-  fetch fails Word falls back to the alt text (browser `<img>` behavior)
-
-**Not yet** — footnotes, math, the style-mapping UI, and the OOXML fast
-path for bulk insertion.
-
-## Prerequisites
+### Prerequisites
 
 - Node.js 18+ and npm
-- Microsoft Word (desktop or web). For desktop sideloading, see Microsoft's
-  [add-in sideloading docs](https://learn.microsoft.com/office/dev/add-ins/testing/test-debug-office-add-ins).
+- Microsoft Word (desktop or web)
 
-## Develop
+### Easy path — one command (Word desktop, Win/Mac)
+
+```bash
+npm install
+npm run sideload      # builds certs, starts the dev server, opens Word with Markwright loaded
+```
+
+`npm run sideload` shells out to `npx --yes office-addin-debugging` — it
+installs the local HTTPS cert (so Word will load the add-in), starts the
+dev server on `https://localhost:3000`, registers the manifest, and
+launches Word with Markwright already in the ribbon. The `--yes` flag
+means npx fetches the tool on demand into its cache; it is **not** a
+project dependency, so it never bloats `node_modules` (see
+[Dependency footprint](#dependency-footprint) for why that matters).
+
+To stop and unregister:
+
+```bash
+npm run sideload:stop
+```
+
+> `office-addin-debugging` can only auto-sideload Word **desktop**. For
+> Word on the web, use the manual upload below.
+
+### Manual path
+
+Use this if the easy path can't reach your host (Word web, locked-down
+desktop, or you'd rather not run the helper). Start the dev server
+yourself, then point Word at `dist/manifest.xml`.
 
 ```bash
 npm install
@@ -64,13 +49,15 @@ npx office-addin-dev-certs install   # first time per machine — installs the l
 npm run dev-server                   # serves the bundle on https://localhost:3000
 ```
 
-Word refuses to load add-ins over plain HTTP, hence the cert install. Then
-sideload the manifest **once** per host. The path differs per surface:
+Word refuses to load add-ins over plain HTTP, hence the cert install.
+Then sideload the manifest **once** per host — the path differs per
+surface.
 
-### Word desktop (Windows)
+<details>
+<summary><b>Word desktop (Windows)</b> — trusted shared-folder catalog</summary>
 
-There's no "Upload My Add-in" button on desktop — sideload goes through a
-trusted shared-folder catalog:
+There's no "Upload My Add-in" button on Windows desktop; sideload goes
+through a trusted shared-folder catalog:
 
 1. Create a folder somewhere (e.g. `C:\Users\<you>\WordAddins`) and copy
    `dist/manifest.xml` into it.
@@ -80,14 +67,20 @@ trusted shared-folder catalog:
    check **Show in Menu** for that row. Click OK and restart Word.
 4. *Insert → Add-ins → Shared Folder* tab → Markwright → **Add**.
 
-### Word desktop (Mac)
+</details>
+
+<details>
+<summary><b>Word desktop (Mac)</b> — the <code>wef</code> folder</summary>
 
 Drop `dist/manifest.xml` into
 `~/Library/Containers/com.microsoft.Word/Data/Documents/wef/` (create the
 `wef` folder if it doesn't exist, lowercase). Restart Word and the add-in
 appears under *Insert → My Add-ins*.
 
-### Word web
+</details>
+
+<details>
+<summary><b>Word web</b> — Upload My Add-in (work/school accounts only)</summary>
 
 Available only on **work / school M365 accounts** (consumer Microsoft
 accounts have sideload disabled). The path is *Home → Add-ins → More
@@ -95,7 +88,12 @@ Add-ins → MY ADD-INS tab → Upload My Add-in* (link at the bottom of the
 dialog) → pick `dist/manifest.xml`. If your tenant admin has blocked
 custom add-ins, the upload link is hidden.
 
+</details>
+
 ### After sideload
+
+Open the **Markwright** button on the Home tab, paste markdown into the
+pane, and click **Convert** to write it into the active document.
 
 Edits hot-reload through the dev server — just refresh the task pane.
 When you change icon assets or any other ribbon-cached resource, bump
@@ -103,12 +101,68 @@ When you change icon assets or any other ribbon-cached resource, bump
 icons by manifest ID + version under `%LOCALAPPDATA%\Microsoft\Office\
 16.0\Wef\`; without a version bump it'll keep showing the old icon.
 
-> Earlier versions of this repo used `office-addin-debugging` for one-command
-> sideloading; we dropped it because its `@microsoft/m365agentstoolkit-cli`
-> peer dragged in the Azure ARM SDK (~290 MB of `node_modules`) for a
-> first-time-only convenience.
+## What's supported
 
-## Check before pushing
+Full CommonMark + GFM. The task pane parses markdown into a small `Block`
+AST and writes it into the document via the Word object model, so every
+construct binds to the host document's own styles.
+
+- **Headings** — ATX (`#`..`######`) and Setext (`===` / `---`), bound to
+  Word's built-in Heading 1–6 styles
+- **Inline** — `**bold**`, `*italic*` / `_italic_`, `~~strike~~`,
+  `` `inline code` `` (monospace), `[label](url)`, autolinks `<https://…>`,
+  bare-URL autolinks, reference-style links (`[label][ref]`), hard line
+  breaks (two trailing spaces), backslash escapes, HTML entities
+- **Lists** — bullet, ordered, mixed/nested (continuous numbering per
+  Markdown list scope), and GFM **task lists** (`- [ ]` / `- [x]`)
+- **Blockquotes** — bound to Word's "Quote" style (nesting tracked in the
+  AST; depth-2+ doesn't visually scale indent yet)
+- **Code blocks** — fenced and 4-space indented, rendered as one
+  monospaced (Consolas) paragraph
+- **Thematic breaks** (`---`, `***`, `___`) — rendered as a bottom-bordered
+  paragraph via `insertHtml("<hr/>")`
+- **Tables** — GFM, with per-column alignment, inline marks in cells, and
+  bold header rows
+- **Images** (`![alt](src)`, reference-style, optional `"title"`) — rendered
+  as `<img>` so Word fetches the URL; data URIs decode inline, failed
+  fetches fall back to alt text
+
+**Not yet** — footnotes, math, the style-mapping UI, and the OOXML fast
+path for bulk insertion.
+
+## Before 0.1.0 — release guardrails
+
+This is a **local-sideload preview**, not a Store-distributable build.
+Before tagging or publishing 0.1.0, walk this checklist:
+
+- [ ] **Pick a hosting URL.** `manifest.xml` and `webpack.config.js`
+      (`urlProd`) both point at `https://localhost:3000`. A production
+      build is therefore only loadable on a machine running the dev
+      server — it is **not** distributable as-is. Set `urlProd` to the
+      real HTTPS host and rewrite the manifest URLs before shipping
+      anything beyond local sideload.
+- [ ] **Keep versions in lockstep.** `package.json` `version` and the
+      manifest `<Version>` (4-part) must agree. Currently both read
+      `0.1.0`. Bump them together each release.
+- [ ] **Run the gates** — `npm run typecheck && npm run lint && npm test
+      && npm run build`. The build is size-gated (200 KB/asset), so a
+      regression there fails CI too.
+- [ ] **Validate the manifest** — `npm run validate`.
+- [ ] **`npm audit` clean** — no known high/critical advisories in the
+      shipped dependency (`markdown-it`).
+- [ ] **Image fetch is remote content.** Images are handed to Word's HTML
+      paste pipeline, which fetches arbitrary URLs from the user's
+      machine. `src`/`alt`/`title` are HTML-escaped before they hit the
+      tag (untrusted input lands inside an attribute — don't skip this),
+      but document the privacy implication: converting a doc with remote
+      image URLs makes outbound requests.
+- [ ] **Decide the support surface** — `SupportUrl` in the manifest points
+      at the GitHub repo; confirm that's where you want issues to land.
+
+## Develop
+
+Run all four gates locally before pushing — CI runs the same set on every
+PR via `.github/workflows/ci.yml`:
 
 ```bash
 npm run typecheck   # tsc --noEmit
@@ -121,15 +175,14 @@ npm run build       # production webpack build (no sourcemaps, size-gated)
 The production build enforces a **moderate size budget** via webpack's
 `performance.hints = "error"`: each JS asset must stay under **200 KB**,
 each entrypoint under **250 KB**. Current `taskpane.js` is ~132 KB, so
-there's ~35% headroom — enough for a small feature without re-baselining.
-The dev build is exempt (sourcemaps push it past the limit by design).
+there's ~35% headroom. The dev build is exempt (sourcemaps push it past
+the limit by design).
 
-All four (typecheck, lint, test, build) also run in CI on every PR via
-`.github/workflows/ci.yml`. The lint config (`eslint.config.mjs`) layers
-the `eslint-plugin-office-addins` rules — which catch real Office.js
-footguns like `context.sync()` in loops and reading a property before
-calling `load()` — over `@typescript-eslint`'s recommended rules, plus
-the project's stricter additions (`no-explicit-any`,
+The lint config (`eslint.config.mjs`) layers the
+`eslint-plugin-office-addins` rules — which catch real Office.js footguns
+like `context.sync()` in loops and reading a property before calling
+`load()` — over `@typescript-eslint`'s recommended rules, plus the
+project's stricter additions (`no-explicit-any`,
 `consistent-type-imports`, `no-non-null-assertion`,
 `no-inferrable-types`). Prettier owns formatting; settings live in
 `.prettierrc.json`.
@@ -216,6 +269,13 @@ wrappers, both of which dragged in large transitive trees (the
 debugging wrapper pulled ~290 MB of Azure ARM SDK via its
 `@microsoft/m365agentstoolkit-cli` peer) without proportional value.
 
+That's why `npm run sideload` reaches `office-addin-debugging` through
+`npx --yes` instead of listing it as a devDependency: contributors who
+want the one-command sideload pay a one-time download into npx's cache,
+while everyone else keeps the lean `node_modules`. Don't "fix" the
+sideload script by re-adding the dependency — that's the 290 MB we
+deliberately removed.
+
 ## Project layout
 
 ```
@@ -259,9 +319,12 @@ API.
 likely revisit OOXML emission since the object model doesn't expose
 them.
 
-**M7 — polish + distribution.** Manifest cleanup for store submission,
-icons at additional sizes if needed, end-to-end sideload docs.
+**M7 — polish + distribution.** Manifest cleanup for store submission
+(starting with the hosting-URL guardrail above), icons at additional
+sizes if needed, end-to-end sideload docs.
 
 ## License
 
 MIT. See [LICENSE](./LICENSE).
+</content>
+</invoke>

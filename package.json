@@ -8,6 +8,8 @@
     "build": "webpack --mode production",
     "build:dev": "webpack --mode development",
     "dev-server": "webpack serve --mode development",
+    "sideload": "npx --yes office-addin-debugging@latest start manifest.xml",
+    "sideload:stop": "npx --yes office-addin-debugging@latest stop manifest.xml",
     "validate": "npx --yes office-addin-manifest@latest validate manifest.xml",
     "lint": "eslint . && prettier --check src tests *.mjs *.json",
     "lint:fix": "eslint . --fix && prettier --write src tests *.mjs *.json",

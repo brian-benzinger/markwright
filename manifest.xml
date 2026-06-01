@@ -7,7 +7,7 @@
   xsi:type="TaskPaneApp">
 
   <Id>1fab80d5-c549-43b3-93ba-cebcfad68f0c</Id>
-  <Version>1.0.0.1</Version>
+  <Version>0.1.0.0</Version>
   <ProviderName>Markwright</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Markwright" />
