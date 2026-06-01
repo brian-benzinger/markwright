@@ -8,34 +8,41 @@ Office.js + TypeScript.
 
 ## Install
 
-### Prerequisites
+### Just use it — `npx markwright` (Word desktop, Win/Mac)
 
-- Node.js 18+ and npm
-- Microsoft Word (desktop or web)
+No clone, no build:
 
-### Easy path — one command (Word desktop, Win/Mac)
+```bash
+npx markwright          # serves the prebuilt pane locally and sideloads it into Word
+npx markwright stop     # unregister when you're done
+```
+
+This downloads the published package, installs the local HTTPS cert (so
+Word will trust the add-in), serves the prebuilt task pane on
+`https://localhost:3000` from **your** machine, registers the manifest,
+and launches Word with Markwright in the ribbon. Because the page is
+hosted on your own localhost, there's no server to stand up anywhere — the
+add-in only runs while `npx markwright` is running.
+
+> Word **on the web** can't be driven by a CLI (sideload there is a
+> tenant feature). Use the [manual upload](#manual-path) below.
+
+### Build from source
+
+For hacking on Markwright. Needs **Node 18+** and **Microsoft Word**.
 
 ```bash
 npm install
-npm run sideload      # builds certs, starts the dev server, opens Word with Markwright loaded
+npm run sideload        # certs + hot-reloading dev server + opens Word
+npm run sideload:stop   # unregister
 ```
 
-`npm run sideload` shells out to `npx --yes office-addin-debugging` — it
-installs the local HTTPS cert (so Word will load the add-in), starts the
-dev server on `https://localhost:3000`, registers the manifest, and
-launches Word with Markwright already in the ribbon. The `--yes` flag
-means npx fetches the tool on demand into its cache; it is **not** a
-project dependency, so it never bloats `node_modules` (see
-[Dependency footprint](#dependency-footprint) for why that matters).
-
-To stop and unregister:
-
-```bash
-npm run sideload:stop
-```
-
-> `office-addin-debugging` can only auto-sideload Word **desktop**. For
-> Word on the web, use the manual upload below.
+`npm run sideload` shells out to `npx --yes office-addin-debugging` — same
+one-command sideload, but pointed at the webpack **dev server** so source
+edits hot-reload. The `--yes` flag fetches the tool into npx's cache on
+demand; it is **not** a project dependency, so it never bloats
+`node_modules` (see [Dependency footprint](#dependency-footprint) for why
+that matters).
 
 ### Manual path
 
@@ -132,15 +139,22 @@ path for bulk insertion.
 
 ## Before 0.1.0 — release guardrails
 
-This is a **local-sideload preview**, not a Store-distributable build.
-Before tagging or publishing 0.1.0, walk this checklist:
+0.1.0 ships as an **npm package you sideload locally** (`npx markwright`),
+not a Store-listed add-in. Before tagging or `npm publish`, walk this
+checklist:
 
-- [ ] **Pick a hosting URL.** `manifest.xml` and `webpack.config.js`
-      (`urlProd`) both point at `https://localhost:3000`. A production
-      build is therefore only loadable on a machine running the dev
-      server — it is **not** distributable as-is. Set `urlProd` to the
-      real HTTPS host and rewrite the manifest URLs before shipping
-      anything beyond local sideload.
+- [x] **Hosting model: per-user localhost.** Distribution is via npm, so
+      `npx markwright` serves the prebuilt `dist/` from the user's own
+      machine — the `localhost:3000` URLs in `manifest.xml` are correct by
+      design and there's no remote host to operate. (A future *Store*-hosted
+      build would instead need a real HTTPS `urlProd` in
+      `webpack.config.js`; `urlProd` is still a localhost placeholder for
+      exactly that reason.)
+- [ ] **npm publish readiness.** `private` is removed, `files` whitelists
+      `bin`/`dist`/`manifest.xml`, and `prepack` runs the production build
+      so the tarball always carries a fresh `dist/`. Before publishing:
+      confirm the `markwright` name is free, you're authed (`npm whoami`),
+      and `npm pack` shows the expected contents.
 - [ ] **Keep versions in lockstep.** `package.json` `version` and the
       manifest `<Version>` (4-part) must agree. Currently both read
       `0.1.0`. Bump them together each release.
@@ -148,8 +162,7 @@ Before tagging or publishing 0.1.0, walk this checklist:
       && npm run build`. The build is size-gated (200 KB/asset), so a
       regression there fails CI too.
 - [ ] **Validate the manifest** — `npm run validate`.
-- [ ] **`npm audit` clean** — no known high/critical advisories in the
-      shipped dependency (`markdown-it`).
+- [ ] **`npm audit` clean** — no known high/critical advisories.
 - [ ] **Image fetch is remote content.** Images are handed to Word's HTML
       paste pipeline, which fetches arbitrary URLs from the user's
       machine. `src`/`alt`/`title` are HTML-escaped before they hit the
@@ -262,24 +275,30 @@ use. The current footprint:
 | `dist/` (production, no sourcemaps) | ~184 KB |
 | `dist/` (development, sourcemaps on) | ~936 KB |
 
-Runtime deps are just `markdown-it`. Dev tooling is `vitest`, `webpack`,
-`typescript`, `eslint` + plugins, and `prettier` — picked individually
-rather than via `office-addin-lint` or `office-addin-debugging`
-wrappers, both of which dragged in large transitive trees (the
-debugging wrapper pulled ~290 MB of Azure ARM SDK via its
-`@microsoft/m365agentstoolkit-cli` peer) without proportional value.
+Runtime deps are `markdown-it` (bundled into the task pane) and
+`office-addin-dev-certs` (the `npx markwright` CLI uses it to serve `dist/`
+over trusted HTTPS — see `bin/serve.mjs`). Dev tooling is `vitest`,
+`webpack`, `typescript`, `eslint` + plugins, and `prettier` — picked
+individually rather than via `office-addin-lint` or
+`office-addin-debugging` wrappers, both of which dragged in large
+transitive trees (the debugging wrapper pulled ~290 MB of Azure ARM SDK
+via its `@microsoft/m365agentstoolkit-cli` peer) without proportional
+value.
 
-That's why `npm run sideload` reaches `office-addin-debugging` through
-`npx --yes` instead of listing it as a devDependency: contributors who
-want the one-command sideload pay a one-time download into npx's cache,
-while everyone else keeps the lean `node_modules`. Don't "fix" the
-sideload script by re-adding the dependency — that's the 290 MB we
-deliberately removed.
+That's why both `npm run sideload` and the published `markwright` CLI
+reach `office-addin-debugging` through `npx --yes` instead of listing it
+as a dependency: whoever wants the one-command sideload pays a one-time
+download into npx's cache, while everyone keeps the lean `node_modules`.
+Don't "fix" the sideload path by adding the dependency — that's the
+290 MB we deliberately removed.
 
 ## Project layout
 
 ```
 manifest.xml             XML add-in-only manifest (cross-platform)
+bin/
+  markwright.mjs         `npx markwright` entry — sideloads via office-addin-debugging
+  serve.mjs              HTTPS static server for the prebuilt dist/ (CLI dev server)
 src/
   convert/               markdown-it → Block[] AST (pure, unit-tested)
   taskpane/
@@ -319,9 +338,10 @@ API.
 likely revisit OOXML emission since the object model doesn't expose
 them.
 
-**M7 — polish + distribution.** Manifest cleanup for store submission
-(starting with the hosting-URL guardrail above), icons at additional
-sizes if needed, end-to-end sideload docs.
+**M7 — polish + distribution.** npm distribution via `npx markwright` is
+in (this milestone's first slice); remaining: manifest cleanup for Store
+submission (which would revisit the hosting-URL guardrail above), icons at
+additional sizes if needed, end-to-end sideload docs.
 
 ## License
 
