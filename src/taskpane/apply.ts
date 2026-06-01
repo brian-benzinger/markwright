@@ -139,6 +139,14 @@ function applyTable(
 ): void {
   const colCount = block.alignments.length;
   const rowCount = 1 + block.rows.length;
+  // The anchor was created by `prev.insertParagraph(After)`, so it
+  // inherited the previous block's style. When a table follows a
+  // heading, that means the anchor is Heading 3 (etc.). Reset it to
+  // Normal: if the table is the last block, this trailing empty
+  // paragraph — and anything the user types after it — must not stay
+  // stuck in the heading style. If another block reuses the anchor
+  // (paragraphIsEmpty), applyBlock restyles it anyway, so this is safe.
+  anchor.styleBuiltIn = Word.BuiltInStyleName.normal;
   // Insert the table BEFORE our empty anchor paragraph so the anchor
   // survives below the table. nextParagraph reuses the anchor on the
   // following block (paragraphIsEmpty flag).
