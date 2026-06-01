@@ -13,12 +13,22 @@ import { type Alignment, type Block, type Image, type Inline, type Run } from ".
 export async function applyBlocks(blocks: Block[]): Promise<void> {
   await Word.run(async (context) => {
     const selection = context.document.getSelection();
+    // Capture the insertion point's default font name with a single sync
+    // up front. We need it to reset the font after an inline-code run:
+    // insertText("…", End) inherits the previous character's font, so
+    // `code` text` would leave `text` in Consolas for the rest of the
+    // paragraph. This is the one round-trip the formatRange comment was
+    // unwilling to pay PER RUN — paid once here it's cheap.
+    selection.load("font/name");
+    await context.sync();
+    const defaultFontName = selection.font.name;
     selection.insertText("", Word.InsertLocation.replace);
     const state: RenderState = {
       currentList: null,
       currentListId: 0,
       configuredLevels: new Map(),
       paragraphIsEmpty: false,
+      defaultFontName,
     };
     let para = selection.insertParagraph("", Word.InsertLocation.before);
     applyBlock(para, blocks[0], state);
@@ -39,6 +49,12 @@ type RenderState = {
   // paragraph.insertTable can only insert Before/After, so we anchor
   // the table to an empty paragraph and reuse it for whatever follows.
   paragraphIsEmpty: boolean;
+  // The insertion point's default font name, captured once up front.
+  // Used to reset a run's font after an inline-code run so Consolas
+  // doesn't bleed into the rest of the paragraph. May be empty if Word
+  // reported no single font (e.g. a mixed-font selection); runFontName
+  // then skips the reset rather than clearing the font.
+  defaultFontName: string;
 };
 
 // Returns the paragraph the next block should land in, and updates the
@@ -135,8 +151,12 @@ function applyBlock(paragraph: Word.Paragraph, block: Block, state: RenderState)
     paragraph.styleBuiltIn =
       block.kind === "heading" ? headingStyle(block.level) : Word.BuiltInStyleName.normal;
   }
+  // Track whether the previous run was inline code so the next run can
+  // reset its font (Consolas would otherwise bleed forward — see
+  // runFontName / formatRange).
+  let prevWasCode = false;
   for (const inline of block.runs) {
-    applyInline(paragraph, inline);
+    prevWasCode = applyInline(paragraph, inline, prevWasCode, state.defaultFontName);
   }
 }
 
@@ -160,11 +180,23 @@ function applyTable(
   // following block (paragraphIsEmpty flag).
   const table = anchor.insertTable(rowCount, colCount, Word.InsertLocation.before);
   for (let c = 0; c < colCount; c++) {
-    applyCell(table.getCell(0, c), block.header[c] ?? [], block.alignments[c], true);
+    applyCell(
+      table.getCell(0, c),
+      block.header[c] ?? [],
+      block.alignments[c],
+      true,
+      state.defaultFontName
+    );
   }
   for (let r = 0; r < block.rows.length; r++) {
     for (let c = 0; c < colCount; c++) {
-      applyCell(table.getCell(r + 1, c), block.rows[r][c] ?? [], block.alignments[c], false);
+      applyCell(
+        table.getCell(r + 1, c),
+        block.rows[r][c] ?? [],
+        block.alignments[c],
+        false,
+        state.defaultFontName
+      );
     }
   }
   // A table breaks any active list scope; the anchor remains empty for
@@ -178,16 +210,20 @@ function applyCell(
   cell: Word.TableCell,
   inlines: Inline[],
   alignment: Alignment,
-  isHeader: boolean
+  isHeader: boolean,
+  defaultFontName: string
 ): void {
   cell.horizontalAlignment = alignToWord(alignment);
   const cellPara = cell.body.paragraphs.getFirst();
+  let prevWasCode = false;
   for (const inline of inlines) {
     if ("src" in inline) {
       applyImage(cellPara, inline);
+      prevWasCode = false;
     } else {
       const range = cellPara.insertText(inline.text, Word.InsertLocation.end);
-      formatRange(range, inline, isHeader);
+      formatRange(range, inline, isHeader, runFontName(inline, prevWasCode, defaultFontName));
+      prevWasCode = !!inline.code;
     }
   }
 }
@@ -223,17 +259,41 @@ function configureListLevel(state: RenderState, depth: number, ordered: boolean)
   }
 }
 
-function applyInline(paragraph: Word.Paragraph, inline: Inline): void {
+// Renders one inline and returns whether it was an inline-code run, so
+// the caller can tell the next run to reset its font.
+function applyInline(
+  paragraph: Word.Paragraph,
+  inline: Inline,
+  prevWasCode: boolean,
+  defaultFontName: string
+): boolean {
   if ("src" in inline) {
     applyImage(paragraph, inline);
-  } else {
-    applyRun(paragraph, inline);
+    return false;
   }
+  applyRun(paragraph, inline, prevWasCode, defaultFontName);
+  return !!inline.code;
 }
 
-function applyRun(paragraph: Word.Paragraph, run: Run): void {
+function applyRun(
+  paragraph: Word.Paragraph,
+  run: Run,
+  prevWasCode: boolean,
+  defaultFontName: string
+): void {
   const range = paragraph.insertText(run.text, Word.InsertLocation.end);
-  formatRange(range, run, false);
+  formatRange(range, run, false, runFontName(run, prevWasCode, defaultFontName));
+}
+
+// Decides the font name to force on a run, or undefined to leave it
+// alone. Code runs get Consolas. A non-code run that FOLLOWS a code run
+// is reset to the document default so Consolas doesn't bleed forward;
+// every other non-code run is left untouched so heading/quote fonts
+// survive. The reset is skipped when no default font name is known.
+function runFontName(run: Run, prevWasCode: boolean, defaultFontName: string): string | undefined {
+  if (run.code) return "Consolas";
+  if (prevWasCode && defaultFontName) return defaultFontName;
+  return undefined;
 }
 
 function applyImage(paragraph: Word.Paragraph, image: Image): void {
@@ -255,7 +315,12 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function formatRange(range: Word.Range, run: Run, forceBold: boolean): void {
+function formatRange(
+  range: Word.Range,
+  run: Run,
+  forceBold: boolean,
+  fontName: string | undefined
+): void {
   // Always assign the toggleable marks explicitly. insertText("…", End)
   // makes the new range inherit the previous character's formatting in
   // Word, so a `**bold** plain` paragraph would leave `plain` bold
@@ -263,14 +328,12 @@ function formatRange(range: Word.Range, run: Run, forceBold: boolean): void {
   range.font.bold = !!run.bold || forceBold;
   range.font.italic = !!run.italic;
   range.font.strikeThrough = !!run.strike;
-  // Word has no built-in "code" character style; fall back to a monospace
-  // font. We only force-set the name on code runs — non-code runs leave
-  // the paragraph's default font alone, which means a paragraph like
-  // ``code` text` will leave `text` in Consolas until the end of the
-  // paragraph. Known limitation; the alternative is reading the
-  // paragraph's default font name via load+sync, which would force a
-  // mid-flow sync we're not paying yet.
-  if (run.code) range.font.name = "Consolas";
+  // Word has no built-in "code" character style; code runs fall back to a
+  // monospace font (fontName === "Consolas"). The same inheritance that
+  // bleeds bold also bleeds that font into the next run, so runFontName
+  // hands us the document default to reset it; undefined means leave the
+  // font alone (preserving the paragraph style's own font).
+  if (fontName !== undefined) range.font.name = fontName;
   if (run.link) range.hyperlink = run.link;
 }
 
