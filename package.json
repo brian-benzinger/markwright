@@ -3,22 +3,48 @@
   "version": "0.1.0",
   "description": "Markwright crafts polished Word documents from raw markdown.",
   "license": "MIT",
-  "private": true,
+  "keywords": [
+    "word",
+    "office-addin",
+    "markdown",
+    "office-js"
+  ],
+  "homepage": "https://github.com/brian-benzinger/markwright#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brian-benzinger/markwright.git"
+  },
+  "bugs": {
+    "url": "https://github.com/brian-benzinger/markwright/issues"
+  },
+  "bin": {
+    "markwright": "bin/markwright.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "manifest.xml"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "webpack --mode production",
     "build:dev": "webpack --mode development",
     "dev-server": "webpack serve --mode development",
-    "sideload": "npx --yes office-addin-debugging@latest start manifest.xml",
+    "sideload": "npx --yes office-addin-debugging@latest start manifest.xml desktop --app word --no-debug --dev-server \"npm run dev-server\" --dev-server-port 3000",
     "sideload:stop": "npx --yes office-addin-debugging@latest stop manifest.xml",
     "validate": "npx --yes office-addin-manifest@latest validate manifest.xml",
     "lint": "eslint . && prettier --check src tests *.mjs *.json",
     "lint:fix": "eslint . --fix && prettier --write src tests *.mjs *.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepack": "npm run build"
   },
   "dependencies": {
-    "markdown-it": "^14.2.0"
+    "markdown-it": "^14.2.0",
+    "office-addin-dev-certs": "^2.0.9"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
@@ -32,7 +58,6 @@
     "eslint-plugin-office-addins": "^4.0.9",
     "globals": "^15.15.0",
     "html-webpack-plugin": "^5.6.0",
-    "office-addin-dev-certs": "^2.0.9",
     "prettier": "^3.8.3",
     "ts-loader": "^9.5.1",
     "typescript": "^5.4.5",
