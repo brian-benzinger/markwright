@@ -95,6 +95,14 @@ function applyBlock(paragraph: Word.Paragraph, block: Block, state: RenderState)
     // and — worse — detaches subsequent items from the list (Office.js
     // styleBuiltIn assignment can clear list membership).
     if (state.currentList === null || state.currentListId !== block.listId) {
+      // The first item was created by prev.insertParagraph(After), so it
+      // inherited the previous block's style — Heading 3 when the list
+      // follows a heading. Reset to Normal BEFORE startNewList so the
+      // item (and the rest of the list/page) isn't heading-styled. Doing
+      // it before list attachment sidesteps the styleBuiltIn-clears-list-
+      // membership problem noted above; continuation items come from the
+      // list itself and are already Normal, so they're left untouched.
+      paragraph.styleBuiltIn = Word.BuiltInStyleName.normal;
       state.currentList = paragraph.startNewList();
       state.currentListId = block.listId;
     }
@@ -205,7 +213,11 @@ function configureListLevel(state: RenderState, depth: number, ordered: boolean)
   if (levels.has(depth)) return;
   levels.add(depth);
   if (ordered) {
-    state.currentList.setLevelNumbering(depth, Word.ListNumbering.arabic);
+    // Without a format string, Word renders a bare "1" with no trailing
+    // separator. The format array places the level's number (the integer
+    // placeholder for this level) followed by a literal ".", yielding
+    // "1." / "2." as Markdown ordered lists expect.
+    state.currentList.setLevelNumbering(depth, Word.ListNumbering.arabic, [depth, "."]);
   } else {
     state.currentList.setLevelBullet(depth, Word.ListBullet.solid);
   }
