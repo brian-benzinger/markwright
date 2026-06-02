@@ -67,9 +67,15 @@ that matters).
 
 ### Manual path
 
-Use this if the easy path can't reach your host (Word web, locked-down
-desktop, or you'd rather not run the helper). Start the dev server
-yourself, then point Word at `dist/manifest.xml`.
+Use this to sideload the manifest by hand — whether it's the **hosted**
+`manifest.xml` you downloaded from
+[GitHub Pages](#recommended--sideload-the-hosted-add-in-no-server-ever)
+(nothing else to run) or a **local source build** you're hacking on.
+
+If you're sideloading the hosted manifest, **skip the next block** — the
+content is already served over HTTPS from Pages. The cert + dev server are
+only needed when you want Word pointed at your own `dist/` over
+`https://localhost:3000`:
 
 ```bash
 npm install
@@ -78,29 +84,62 @@ npm run dev-server                   # serves the bundle on https://localhost:30
 ```
 
 Word refuses to load add-ins over plain HTTP, hence the cert install.
-Then sideload the manifest **once** per host — the path differs per
-surface.
+Either way, sideload the manifest **once** per host — the steps differ per
+surface (below, "your `manifest.xml`" means the hosted download or your
+local `dist/manifest.xml`).
 
 <details>
 <summary><b>Word desktop (Windows)</b> — trusted shared-folder catalog</summary>
 
 There's no "Upload My Add-in" button on Windows desktop; sideload goes
-through a trusted shared-folder catalog:
+through a trusted **shared-folder catalog**. The catalog URL must be a
+**UNC network share** (`\\…`) — a plain `C:\…` path is rejected — and it
+must point at the **folder that directly contains** `manifest.xml`, not a
+parent or child of it.
 
-1. Create a folder somewhere (e.g. `C:\Users\<you>\WordAddins`) and copy
-   `dist/manifest.xml` into it.
-2. In Word, *File → Options → Trust Center → Trust Center Settings →
-   Trusted Add-in Catalogs.*
-3. Paste the folder path in **Catalog Url**, click **Add Catalog**, then
-   check **Show in Menu** for that row. Click OK and restart Word.
-4. *Insert → Add-ins → Shared Folder* tab → Markwright → **Add**.
+1. Make a folder and put your downloaded `manifest.xml` **inside it**
+   (e.g. `C:\Users\<you>\Downloads\markwright\manifest.xml`).
+2. Turn that folder into a share. Easiest from an **admin PowerShell**:
+   ```powershell
+   New-SmbShare -Name WordAddins -Path C:\Users\<you>\Downloads\markwright -FullAccess "$env:USERNAME"
+   ```
+   …which gives you the catalog URL `\\localhost\WordAddins`. (GUI
+   alternative: right-click the folder → *Properties → Sharing → Share…*
+   → add yourself → **Share**; the share name defaults to the folder name.
+   The hidden admin share also works without creating one:
+   `\\localhost\c$\Users\<you>\Downloads\markwright`.)
+3. In Word, *File → Options → Trust Center → Trust Center Settings →
+   Trusted Add-in Catalogs.* Paste the `\\…` URL in **Catalog Url**, click
+   **Add Catalog**, check **Show in Menu** for that row, **OK**, then
+   **fully restart Word** (kill any lingering `WINWORD.EXE` in Task
+   Manager).
+4. Load it: *Insert → My Add-ins → **More Add-ins*** → **SHARED FOLDER**
+   tab → **Markwright** → **Add**. (Even with "Show in Menu" ticked you
+   still pick it from this dialog once; after that it's remembered.)
+
+Troubleshooting:
+- **"No add-ins available"** in the Shared Folder tab → the catalog folder
+  doesn't actually contain `manifest.xml`. Open the exact `\\…` path in
+  File Explorer and confirm the file sits in that folder's root (the
+  classic miss is the manifest one level up, e.g. in `Downloads\` while
+  the catalog points at `Downloads\markwright\`).
+- **"Windows can't find \\\\localhost\\…"** → that name isn't a real share.
+  `\\localhost\<name>` only resolves if `<name>` is a *shared* folder, not
+  an arbitrary path. Create the share (step 2) or use the `c$` admin form.
+- Still empty after fixing the path → Word cached the empty catalog. Clear
+  it: delete everything inside `%LOCALAPPDATA%\Microsoft\Office\16.0\Wef\`
+  and reopen Word.
 
 </details>
+
+> **Less hassle:** the shared-folder dance is Windows-desktop-only. **Word
+> on the web** sideloads the same manifest with a plain file picker (no
+> sharing) — see the Word web row below.
 
 <details>
 <summary><b>Word desktop (Mac)</b> — the <code>wef</code> folder</summary>
 
-Drop `dist/manifest.xml` into
+Drop your `manifest.xml` into
 `~/Library/Containers/com.microsoft.Word/Data/Documents/wef/` (create the
 `wef` folder if it doesn't exist, lowercase). Restart Word and the add-in
 appears under *Insert → My Add-ins*.
@@ -113,8 +152,9 @@ appears under *Insert → My Add-ins*.
 Available only on **work / school M365 accounts** (consumer Microsoft
 accounts have sideload disabled). The path is *Home → Add-ins → More
 Add-ins → MY ADD-INS tab → Upload My Add-in* (link at the bottom of the
-dialog) → pick `dist/manifest.xml`. If your tenant admin has blocked
-custom add-ins, the upload link is hidden.
+dialog) → pick your `manifest.xml`. No folder sharing — this is the
+lowest-friction surface. If your tenant admin has blocked custom add-ins,
+the upload link is hidden.
 
 </details>
 
