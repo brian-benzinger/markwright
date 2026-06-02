@@ -1,0 +1,47 @@
+name: deploy
+
+# Publishes the production bundle (dist/) to GitHub Pages so the add-in's
+# task pane is served from an always-on static origin
+# (https://brian-benzinger.github.io/markwright/). The webpack production
+# build rewrites the localhost URLs in manifest.xml to that origin, so the
+# manifest served from Pages is the one users sideload once — no local
+# server required.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Allow only one concurrent deployment; skip runs queued behind a newer one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # GitHub Pages needs these scopes to mint the deploy token.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

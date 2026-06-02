@@ -8,9 +8,31 @@ Office.js + TypeScript.
 
 ## Install
 
-### Just use it — `npx markwright` (Word desktop, Win/Mac)
+### Recommended — sideload the hosted add-in (no server, ever)
 
-No clone, no build:
+Markwright's task pane is hosted on GitHub Pages at
+`https://brian-benzinger.github.io/markwright/`. The add-in is pure
+client-side code — markdown is parsed and written into your document
+entirely inside Word; nothing about your document leaves your machine.
+That means there's **no server to run**: you sideload the manifest **once**
+and it works forever, including after reboots.
+
+1. Download the manifest:
+   [`https://brian-benzinger.github.io/markwright/manifest.xml`](https://brian-benzinger.github.io/markwright/manifest.xml)
+2. Sideload it once for your platform using the [steps below](#manual-path)
+   — but **skip the cert install and dev server**; those are only for the
+   source build. The hosted manifest already points at a public HTTPS
+   origin, so Word trusts it as-is.
+
+Updates ship automatically: each push to `main` redeploys `dist/` to
+Pages, so a refreshed task pane reaches you without re-sideloading (bump
+`<Version>` only when ribbon-cached resources like icons change).
+
+### Offline / desktop one-shot — `npx markwright` (Win/Mac)
+
+Prefer not to rely on the hosted origin (air-gapped, or you want the pane
+served from your own machine)? `npx markwright` serves the prebuilt pane on
+`https://localhost:3000` locally and sideloads it:
 
 ```bash
 npx markwright          # serves the prebuilt pane locally and sideloads it into Word
@@ -18,14 +40,13 @@ npx markwright stop     # unregister when you're done
 ```
 
 This downloads the published package, installs the local HTTPS cert (so
-Word will trust the add-in), serves the prebuilt task pane on
-`https://localhost:3000` from **your** machine, registers the manifest,
-and launches Word with Markwright in the ribbon. Because the page is
-hosted on your own localhost, there's no server to stand up anywhere — the
-add-in only runs while `npx markwright` is running.
+Word will trust the add-in), serves the task pane from **your** machine,
+registers the manifest, and launches Word. The trade-off: the add-in only
+runs while `npx markwright` is running.
 
 > Word **on the web** can't be driven by a CLI (sideload there is a
-> tenant feature). Use the [manual upload](#manual-path) below.
+> tenant feature). For web, use the hosted manifest above (or the
+> [manual upload](#manual-path)).
 
 ### Build from source
 
@@ -139,17 +160,19 @@ path for bulk insertion.
 
 ## Before 0.1.0 — release guardrails
 
-0.1.0 ships as an **npm package you sideload locally** (`npx markwright`),
-not a Store-listed add-in. Before tagging or `npm publish`, walk this
-checklist:
+0.1.0 ships two ways: the **hosted manifest on GitHub Pages** (the
+recommended, zero-server install) and the **`npx markwright`** local
+fallback. It's not yet a Store-listed add-in. Before tagging or
+`npm publish`, walk this checklist:
 
-- [x] **Hosting model: per-user localhost.** Distribution is via npm, so
-      `npx markwright` serves the prebuilt `dist/` from the user's own
-      machine — the `localhost:3000` URLs in `manifest.xml` are correct by
-      design and there's no remote host to operate. (A future *Store*-hosted
-      build would instead need a real HTTPS `urlProd` in
-      `webpack.config.js`; `urlProd` is still a localhost placeholder for
-      exactly that reason.)
+- [x] **Hosting model: GitHub Pages (static).** `dist/` is published to
+      `https://brian-benzinger.github.io/markwright/` by
+      `.github/workflows/deploy.yml`, and `urlProd` in `webpack.config.js`
+      points the production manifest there. The add-in is pure client-side
+      code, so the host is a plain static origin — no backend to operate.
+      `npx markwright` remains as a localhost fallback for offline/air-gapped
+      use. (A future *Store* listing builds on top of this same hosted
+      origin — AppSource distributes the manifest but does not host the JS.)
 - [ ] **npm publish readiness.** `private` is removed, `files` whitelists
       `bin`/`dist`/`manifest.xml`, and `prepack` runs the production build
       so the tarball always carries a fresh `dist/`. Before publishing:
