@@ -4,7 +4,12 @@ const CopyWebpackPlugin = require("copy-webpack-plugin");
 const devCerts = require("office-addin-dev-certs");
 
 const urlDev = "https://localhost:3000/";
-const urlProd = "https://localhost:3000/"; // replace at distribution time
+// Production host: dist/ is published to GitHub Pages by
+// .github/workflows/deploy.yml, so the manifest's SourceLocation/icon URLs
+// resolve to an always-on static origin. Users sideload the hosted manifest
+// once and never start a local server. Pages serves under the repo subpath,
+// hence the trailing "/markwright/".
+const urlProd = "https://brian-benzinger.github.io/markwright/";
 
 async function getHttpsOptions() {
   const httpsOptions = await devCerts.getHttpsServerOptions();
