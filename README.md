@@ -195,8 +195,13 @@ construct binds to the host document's own styles.
   as `<img>` so Word fetches the URL; data URIs decode inline, failed
   fetches fall back to alt text
 
-**Not yet** — footnotes, math, the style-mapping UI, and the OOXML fast
-path for bulk insertion.
+- **Style mapping** — a **Styles** panel lets you bind each block construct
+  (Heading 1–6, paragraph, blockquote, code block) to any of the host
+  document's paragraph styles; the choice persists per-document via the
+  Office `Settings` API. Left unconfigured, everything uses the built-in
+  defaults above.
+
+**Not yet** — footnotes, math, and the OOXML fast path for bulk insertion.
 
 ## Before 0.1.0 — release guardrails
 
@@ -392,10 +397,14 @@ entities).
   (currently dropped — rare in practice)
 - Tables inside list items (dropped — GFM doesn't formally allow this)
 
-**M5 — style binding.** Read the host document's named styles, expose
-a mapping UI so users can pick which Word style each Markdown
-construct binds to, persist the mapping via the Office `Settings`
-API.
+**M5 — style binding.** ✅ Done. Reads the host document's named
+paragraph styles (`getStyles()`), exposes a **Styles** mapping panel so
+users pick which Word style each block construct binds to, and persists
+the mapping per-document via the Office `Settings` API. Defaults
+reproduce the original built-in bindings, so the zero-config path is
+unchanged. Pure map logic lives in `src/convert/styleMap.ts` (tested);
+the Office.js glue is in `src/taskpane/styles.ts`. Remaining: mapping
+list-item and inline (character) styles.
 
 **M6 — stretch.** Footnotes (Pandoc-style), math (LaTeX → OMML). Both
 likely revisit OOXML emission since the object model doesn't expose

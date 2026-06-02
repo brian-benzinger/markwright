@@ -26,7 +26,27 @@
 
       <section class="actions">
         <button id="convert" type="button">Convert</button>
+        <button
+          id="styles-toggle"
+          type="button"
+          class="secondary"
+          aria-expanded="false"
+          aria-controls="styles-panel"
+        >
+          Styles
+        </button>
         <span id="status" role="status" aria-live="polite"></span>
+      </section>
+
+      <section id="styles-panel" class="styles-panel" hidden>
+        <p class="styles-help">
+          Map each Markdown construct to a Word style. “(Default)” keeps the built-in style.
+        </p>
+        <div id="styles-grid" class="styles-grid"></div>
+        <div class="styles-actions">
+          <button id="styles-save" type="button">Save mapping</button>
+          <span id="styles-status" role="status" aria-live="polite"></span>
+        </div>
       </section>
     </main>
 

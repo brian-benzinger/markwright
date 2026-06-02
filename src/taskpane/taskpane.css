@@ -91,6 +91,68 @@ button:disabled {
   color: #c53030;
 }
 
+button.secondary {
+  background: #fff;
+  color: #2b6cb0;
+  border: 1px solid #2b6cb0;
+}
+
+button.secondary:hover {
+  background: #ebf3fb;
+}
+
+.styles-panel {
+  border: 1px solid #d1d1d1;
+  border-radius: 4px;
+  background: #fff;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.styles-help {
+  margin: 0;
+  color: #595959;
+  font-size: 12px;
+}
+
+.styles-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.styles-grid label {
+  font-size: 13px;
+  color: #1f1f1f;
+}
+
+.styles-grid select {
+  font-size: 13px;
+  padding: 4px 6px;
+  border: 1px solid #d1d1d1;
+  border-radius: 4px;
+  background: #fff;
+  width: 100%;
+}
+
+.styles-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#styles-status {
+  color: #595959;
+  font-size: 12px;
+}
+
+#styles-status.error {
+  color: #c53030;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
