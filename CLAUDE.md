@@ -181,5 +181,31 @@ Image rendering:
   cell's first paragraph (no separate run/range dance — images are
   block-shaped inside their inline slot).
 
-After basic Markdown: style-mapping UI (M5), footnotes/math (M6),
+After basic Markdown: style-mapping UI (M5, done), footnotes/math (M6),
 polish + distribution (M7).
+
+## Style mapping (M5)
+
+The user can rebind each block construct to a host-document paragraph
+style. The seam:
+
+- `src/convert/styleMap.ts` is **pure** (no `Word.*`) so it's in
+  coverage scope and unit-tested. A `StyleChoice` is either
+  `{ builtIn: token }` (locale-invariant default, applied via
+  `styleBuiltIn`) or `{ custom: name }` (a host style's `nameLocal`,
+  applied via `paragraph.style`). `defaultStyleMap()` reproduces the
+  original hard-coded bindings exactly, so zero-config rendering is
+  unchanged. `mergeStyleMap` validates an untrusted Settings payload
+  over the defaults — never trust the stored blob directly.
+- `apply.ts` translates a `StyleChoice` in `setParagraphStyle`
+  (`builtInStyle` does token → `Word.BuiltInStyleName`). The map rides
+  on `RenderState.styleMap`. The blockquote left-align override is now
+  gated on the choice still being the built-in Quote, so a remapped
+  quote style keeps its own alignment.
+- `src/taskpane/styles.ts` is the Office.js glue (outside coverage):
+  `loadDocumentParagraphStyles` (feature-detects WordApi 1.5,
+  degrades to `[]`), plus `loadStyleMap`/`saveStyleMap` over
+  `Office.context.document.settings` (key `markwright:styleMap`).
+- List items and inline runs are intentionally NOT mappable yet —
+  setting `styleBuiltIn` on a list paragraph detaches list membership
+  (see the `listItem` branch comment in `apply.ts`).

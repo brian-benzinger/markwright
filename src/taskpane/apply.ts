@@ -1,4 +1,10 @@
 import { type Alignment, type Block, type Image, type Inline, type Run } from "../convert";
+import {
+  defaultStyleMap,
+  type StyleChoice,
+  type StyleMap,
+  type StyleToken,
+} from "../convert/styleMap";
 
 /**
  * Walks `Block[]` and writes the content into the active Word document
@@ -10,7 +16,10 @@ import { type Alignment, type Block, type Image, type Inline, type Run } from ".
  * decides whether to reuse the previous paragraph (right after a table
  * or other anchor-reusing block) or insert a new one.
  */
-export async function applyBlocks(blocks: Block[]): Promise<void> {
+export async function applyBlocks(
+  blocks: Block[],
+  styleMap: StyleMap = defaultStyleMap()
+): Promise<void> {
   await Word.run(async (context) => {
     const selection = context.document.getSelection();
     // Capture the insertion point's default font name with a single sync
@@ -29,6 +38,7 @@ export async function applyBlocks(blocks: Block[]): Promise<void> {
       configuredLevels: new Map(),
       paragraphIsEmpty: false,
       defaultFontName,
+      styleMap,
     };
     let para = selection.insertParagraph("", Word.InsertLocation.before);
     applyBlock(para, blocks[0], state);
@@ -55,6 +65,9 @@ type RenderState = {
   // reported no single font (e.g. a mixed-font selection); runFontName
   // then skips the reset rather than clearing the font.
   defaultFontName: string;
+  // The user-configured (or default) mapping from Markdown constructs to
+  // Word paragraph styles. setParagraphStyle reads it per block.
+  styleMap: StyleMap;
 };
 
 // Returns the paragraph the next block should land in, and updates the
@@ -89,7 +102,7 @@ function applyBlock(paragraph: Word.Paragraph, block: Block, state: RenderState)
     return;
   }
   if (block.kind === "codeBlock") {
-    paragraph.styleBuiltIn = Word.BuiltInStyleName.normal;
+    setParagraphStyle(paragraph, state.styleMap.codeBlock);
     // markdown-it always emits a trailing newline; drop it. Remaining
     // newlines become in-paragraph line breaks so the whole snippet
     // lives in one Word paragraph and a stray Enter doesn't split it.
@@ -136,20 +149,23 @@ function applyBlock(paragraph: Word.Paragraph, block: Block, state: RenderState)
       paragraph.insertText(block.checked ? "☑ " : "☐ ", Word.InsertLocation.end);
     }
   } else if (block.kind === "paragraph" && block.quoteDepth) {
-    paragraph.styleBuiltIn = Word.BuiltInStyleName.quote;
+    setParagraphStyle(paragraph, state.styleMap.blockquote);
     // Word's default Quote style is centered in most themes, which
     // fights the Markdown convention of left-aligned indented quote
-    // text. Force left alignment; users who want their template's
-    // centered Quote behaviour can override via the future style-
-    // mapping UI (M5).
-    paragraph.alignment = Word.Alignment.left;
+    // text. Force left alignment only while the blockquote mapping is
+    // left at its default (built-in Quote); once the user remaps it to a
+    // style of their own, respect that style's alignment.
+    if ("builtIn" in state.styleMap.blockquote) paragraph.alignment = Word.Alignment.left;
     // TODO: visually scale indent for quoteDepth > 1. Word's Quote style
     // sets its own left indent; layering an additive override needs a
     // load+sync of the style's defaults first, which we'd rather not pay
     // for the common single-depth case.
   } else {
-    paragraph.styleBuiltIn =
-      block.kind === "heading" ? headingStyle(block.level) : Word.BuiltInStyleName.normal;
+    const choice =
+      block.kind === "heading"
+        ? state.styleMap[headingTarget(block.level)]
+        : state.styleMap.paragraph;
+    setParagraphStyle(paragraph, choice);
   }
   // Track whether the previous run was inline code so the next run can
   // reset its font (Consolas would otherwise bleed forward — see
@@ -337,19 +353,41 @@ function formatRange(
   if (run.link) range.hyperlink = run.link;
 }
 
-function headingStyle(level: 1 | 2 | 3 | 4 | 5 | 6): Word.BuiltInStyleName {
-  switch (level) {
-    case 1:
-      return Word.BuiltInStyleName.heading1;
-    case 2:
-      return Word.BuiltInStyleName.heading2;
-    case 3:
-      return Word.BuiltInStyleName.heading3;
-    case 4:
-      return Word.BuiltInStyleName.heading4;
-    case 5:
-      return Word.BuiltInStyleName.heading5;
-    case 6:
-      return Word.BuiltInStyleName.heading6;
+// Applies a configured StyleChoice to a paragraph. Built-in tokens go
+// through styleBuiltIn (locale-invariant); custom choices carry a host
+// style's localised name read live from getStyles(), applied via
+// paragraph.style — valid on the install it was chosen on.
+function setParagraphStyle(paragraph: Word.Paragraph, choice: StyleChoice): void {
+  if ("builtIn" in choice) {
+    paragraph.styleBuiltIn = builtInStyle(choice.builtIn);
+  } else {
+    paragraph.style = choice.custom;
   }
+}
+
+function builtInStyle(token: StyleToken): Word.BuiltInStyleName {
+  switch (token) {
+    case "heading1":
+      return Word.BuiltInStyleName.heading1;
+    case "heading2":
+      return Word.BuiltInStyleName.heading2;
+    case "heading3":
+      return Word.BuiltInStyleName.heading3;
+    case "heading4":
+      return Word.BuiltInStyleName.heading4;
+    case "heading5":
+      return Word.BuiltInStyleName.heading5;
+    case "heading6":
+      return Word.BuiltInStyleName.heading6;
+    case "quote":
+      return Word.BuiltInStyleName.quote;
+    case "normal":
+      return Word.BuiltInStyleName.normal;
+  }
+}
+
+function headingTarget(
+  level: 1 | 2 | 3 | 4 | 5 | 6
+): "heading1" | "heading2" | "heading3" | "heading4" | "heading5" | "heading6" {
+  return `heading${level}` as const;
 }
