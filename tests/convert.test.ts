@@ -301,8 +301,14 @@ describe("parseMarkdown — lists", () => {
   });
 
   it("interleaves headings and lists without dropping order", () => {
-    const out = parseMarkdown("# H\n\n- a\n\np\n\n1. one");
-    expect(out.map((b) => b.kind)).toEqual(["heading", "listItem", "paragraph", "listItem"]);
+    // Also verifies: heading level, list orderedness, fresh listId per
+    // top-level list scope, and text content — not just block kinds.
+    expect(parseMarkdown("# H\n\n- a\n\np\n\n1. one")).toEqual([
+      { kind: "heading", level: 1, runs: [{ text: "H" }] },
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "a" }] },
+      { kind: "paragraph", runs: [{ text: "p" }] },
+      { kind: "listItem", ordered: true, depth: 0, listId: 2, runs: [{ text: "one" }] },
+    ]);
   });
 });
 
@@ -694,9 +700,17 @@ describe("parseMarkdown — tables", () => {
   });
 
   it("interleaves a table with surrounding blocks", () => {
-    const src = "before\n\n| H |\n| --- |\n| x |\n\nafter";
-    const out = parseMarkdown(src);
-    expect(out.map((b) => b.kind)).toEqual(["paragraph", "table", "paragraph"]);
+    // Full check: surrounding paragraph texts and table structure, not just kinds.
+    expect(parseMarkdown("before\n\n| H |\n| --- |\n| x |\n\nafter")).toEqual([
+      { kind: "paragraph", runs: [{ text: "before" }] },
+      {
+        kind: "table",
+        header: [[{ text: "H" }]],
+        rows: [[[{ text: "x" }]]],
+        alignments: ["left"],
+      },
+      { kind: "paragraph", runs: [{ text: "after" }] },
+    ]);
   });
 
   it("drops a table nested inside a blockquote (lossy)", () => {
