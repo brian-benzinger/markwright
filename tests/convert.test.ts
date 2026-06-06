@@ -274,6 +274,20 @@ describe("parseMarkdown — lists", () => {
     expect(ids).toEqual([1, 1]);
   });
 
+  it("converts a hard line break inside a list item to U+000B", () => {
+    // Two trailing spaces before a continued list line produce a hardbreak
+    // token that flattenInline converts to "\v", same as in a plain paragraph.
+    expect(parseMarkdown("- line one  \n  line two")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "line one\vline two" }],
+      },
+    ]);
+  });
+
   it("applies inline marks inside list items", () => {
     expect(parseMarkdown("- a **bold** item")).toEqual([
       {
@@ -570,6 +584,15 @@ describe("parseMarkdown — blockquotes", () => {
     ]);
   });
 
+  it("drops a code block inside a blockquote (lossy)", () => {
+    // fence tokens fall through the blockquote branch that only handles
+    // paragraph_open and heading_open; surrounding quoted paragraphs survive.
+    expect(parseMarkdown("> before\n>\n> ```\n> code\n> ```\n>\n> after")).toEqual([
+      { kind: "paragraph", runs: [{ text: "before" }], quoteDepth: 1 },
+      { kind: "paragraph", runs: [{ text: "after" }], quoteDepth: 1 },
+    ]);
+  });
+
   it("flattens list items inside a blockquote to quoted paragraphs (lossy)", () => {
     expect(parseMarkdown("> - one\n> - two")).toEqual([
       { kind: "paragraph", runs: [{ text: "one" }], quoteDepth: 1 },
@@ -644,10 +667,12 @@ describe("parseMarkdown — tables", () => {
 
   it("drops a table nested inside a list (lossy)", () => {
     // The list_open guard keeps the table branch inert; the table
-    // tokens drift through and produce nothing.
+    // tokens drift through and produce nothing. The list item before
+    // the table must still be emitted — this test verifies both sides.
     const src = "- item\n  | H |\n  | --- |\n  | x |";
-    const out = parseMarkdown(src);
-    expect(out.some((b) => b.kind === "table")).toBe(false);
+    expect(parseMarkdown(src)).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "item" }] },
+    ]);
   });
 });
 
