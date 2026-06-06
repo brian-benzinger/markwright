@@ -501,6 +501,47 @@ describe("parseMarkdown — task lists", () => {
       },
     ]);
   });
+
+  it("emits a plain list item (no checked field) when the item starts with inline markup", () => {
+    // consumeTaskPrefix reads children[0]; when the first child is
+    // strong_open (not a text node), it returns undefined and the item
+    // is emitted without a checked property — same as a non-task item.
+    expect(parseMarkdown("- **bold item**")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "bold item", bold: true }],
+      },
+    ]);
+  });
+
+  it("same first-child guard applies to ordered list items starting with markup", () => {
+    expect(parseMarkdown("1. *italic step*")).toEqual([
+      {
+        kind: "listItem",
+        ordered: true,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "italic step", italic: true }],
+      },
+    ]);
+  });
+
+  it("correctly strips a task marker with no space between ] and the item text", () => {
+    // The regex uses `] ?` (optional trailing space) so `[x]done` is valid.
+    expect(parseMarkdown("- [x]done")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "done" }],
+        checked: true,
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — bare-URL autolinks", () => {
