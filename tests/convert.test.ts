@@ -230,8 +230,10 @@ describe("parseMarkdown — lists", () => {
     // Blank line between the lists splits them into two scopes; the
     // second list should get a new listId so the applier knows to start
     // a new Word.List instead of continuing numbering.
-    const out = parseMarkdown("- a\n\n1. b");
-    expect(out.map((b) => "listId" in b && b.listId)).toEqual([1, 2]);
+    expect(parseMarkdown("- a\n\n1. b")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "a" }] },
+      { kind: "listItem", ordered: true, depth: 0, listId: 2, runs: [{ text: "b" }] },
+    ]);
   });
 
   it("tracks depth and ordered-ness on nested lists", () => {
@@ -269,9 +271,10 @@ describe("parseMarkdown — lists", () => {
   });
 
   it("keeps a nested list within the same listId as its parent", () => {
-    const out = parseMarkdown("- top\n  - nested");
-    const ids = out.map((b) => "listId" in b && b.listId);
-    expect(ids).toEqual([1, 1]);
+    expect(parseMarkdown("- top\n  - nested")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "top" }] },
+      { kind: "listItem", ordered: false, depth: 1, listId: 1, runs: [{ text: "nested" }] },
+    ]);
   });
 
   it("converts a hard line break inside a list item to U+000B", () => {
@@ -644,6 +647,12 @@ describe("parseMarkdown — blockquotes", () => {
     expect(parseMarkdown("> - one\n> - two")).toEqual([
       { kind: "paragraph", runs: [{ text: "one" }], quoteDepth: 1 },
       { kind: "paragraph", runs: [{ text: "two" }], quoteDepth: 1 },
+    ]);
+  });
+
+  it("renders an image inside a blockquote as a quoted paragraph", () => {
+    expect(parseMarkdown("> ![logo](https://x/a.png)")).toEqual([
+      { kind: "paragraph", runs: [{ src: "https://x/a.png", alt: "logo" }], quoteDepth: 1 },
     ]);
   });
 });
