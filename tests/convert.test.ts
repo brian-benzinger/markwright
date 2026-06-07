@@ -149,6 +149,27 @@ describe("parseMarkdown — inline marks", () => {
     ]);
   });
 
+  it("applies strikethrough inside a heading", () => {
+    expect(parseMarkdown("# ~~struck~~ heading")).toEqual([
+      {
+        kind: "heading",
+        level: 1,
+        runs: [{ text: "struck", strike: true }, { text: " heading" }],
+      },
+    ]);
+  });
+
+  it("combines strikethrough and link in a single run", () => {
+    // link_open sets s.link; s_open sets s.strikeDepth — both flags land on
+    // the same run because flattenInline reads the full InlineState at push time.
+    expect(parseMarkdown("[~~gone~~](https://x)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "gone", strike: true, link: "https://x" }],
+      },
+    ]);
+  });
+
   it("merges adjacent runs with identical formatting", () => {
     // A softbreak inside a bold span produces three adjacent bold runs
     // (text, space, text) — they should collapse into one.
@@ -728,6 +749,20 @@ describe("parseMarkdown — tables", () => {
     ]);
   });
 
+  it("preserves inline marks in header cells", () => {
+    // Header cells go through the same flattenInline path as body cells;
+    // this guards against a regression where header inline content is dropped.
+    const src = "| [Link](https://x) | **Bold** |\n| --- | --- |\n| a | b |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "Link", link: "https://x" }], [{ text: "Bold", bold: true }]],
+        rows: [[[{ text: "a" }], [{ text: "b" }]]],
+        alignments: ["left", "left"],
+      },
+    ]);
+  });
+
   it("handles multiple body rows", () => {
     const src = "| H |\n| --- |\n| a |\n| b |\n| c |";
     expect(parseMarkdown(src)).toEqual([
@@ -835,6 +870,20 @@ describe("parseMarkdown — images", () => {
         depth: 0,
         listId: 1,
         runs: [{ src: "https://x/a.png", alt: "logo" }],
+      },
+    ]);
+  });
+
+  it("captures the title attribute when the image is in a list item", () => {
+    // Exercises the if (title) branch of flattenInline's image case inside
+    // the list-item code path — previously only covered in plain paragraphs.
+    expect(parseMarkdown('- ![logo](https://x/a.png "tooltip")')).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ src: "https://x/a.png", alt: "logo", title: "tooltip" }],
       },
     ]);
   });
