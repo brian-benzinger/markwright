@@ -303,6 +303,30 @@ describe("parseMarkdown — lists", () => {
     ]);
   });
 
+  it("applies a link inside a list item", () => {
+    expect(parseMarkdown("- see [docs](https://example.com) here")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "see " }, { text: "docs", link: "https://example.com" }, { text: " here" }],
+      },
+    ]);
+  });
+
+  it("applies inline code inside a list item", () => {
+    expect(parseMarkdown("- call `foo()` now")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "call " }, { text: "foo()", code: true }, { text: " now" }],
+      },
+    ]);
+  });
+
   it("interleaves headings and lists without dropping order", () => {
     // Also verifies: heading level, list orderedness, fresh listId per
     // top-level list scope, and text content — not just block kinds.
@@ -631,6 +655,14 @@ describe("parseMarkdown — blockquotes", () => {
         runs: [{ text: "a " }, { text: "bold", bold: true }, { text: " quote" }],
         quoteDepth: 1,
       },
+    ]);
+  });
+
+  it("converts a hard line break inside a blockquote to U+000B", () => {
+    // Two trailing spaces before a continued blockquote line produce a hardbreak
+    // token that flattenInline converts to "\v", same as in a plain paragraph.
+    expect(parseMarkdown("> line one  \n> line two")).toEqual([
+      { kind: "paragraph", runs: [{ text: "line one\vline two" }], quoteDepth: 1 },
     ]);
   });
 
