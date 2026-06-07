@@ -46,6 +46,13 @@ describe("parseMarkdown — block shape", () => {
       { kind: "paragraph", runs: [{ text: "a & b < c > d" }] },
     ]);
   });
+
+  it("drops an empty ATX heading with no text after the marker", () => {
+    // `#` alone produces an inline token with no children; runs.length === 0
+    // and checked === undefined, so the parser skips it rather than emitting
+    // an empty heading block.
+    expect(parseMarkdown("#")).toEqual([]);
+  });
 });
 
 describe("parseMarkdown — inline marks", () => {
@@ -707,6 +714,13 @@ describe("parseMarkdown — blockquotes", () => {
     expect(parseMarkdown("> ![logo](https://x/a.png)")).toEqual([
       { kind: "paragraph", runs: [{ src: "https://x/a.png", alt: "logo" }], quoteDepth: 1 },
     ]);
+  });
+
+  it("drops a blockquote paragraph whose inline content resolves to no runs", () => {
+    // A link with no visible text ([](url)) produces link_open/link_close
+    // tokens but no text child, so flattenInline returns []. The guard
+    // silently skips emitting an empty paragraph block.
+    expect(parseMarkdown("> [](url)")).toEqual([]);
   });
 });
 
