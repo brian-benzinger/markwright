@@ -722,6 +722,12 @@ describe("parseMarkdown — blockquotes", () => {
     // silently skips emitting an empty paragraph block.
     expect(parseMarkdown("> [](url)")).toEqual([]);
   });
+
+  it("preserves strikethrough inside a blockquote", () => {
+    expect(parseMarkdown("> ~~struck~~")).toEqual([
+      { kind: "paragraph", runs: [{ text: "struck", strike: true }], quoteDepth: 1 },
+    ]);
+  });
 });
 
 describe("parseMarkdown — tables", () => {
@@ -819,6 +825,40 @@ describe("parseMarkdown — tables", () => {
       { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "item" }] },
     ]);
   });
+
+  it("parses two consecutive tables as separate blocks", () => {
+    // Verifies the tableCtx is reset to null after table_close so the
+    // second table_open starts a fresh context rather than corrupting it.
+    const src = "| A |\n| --- |\n| r1 |\n\n| B |\n| --- |\n| r2 |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "A" }]],
+        rows: [[[{ text: "r1" }]]],
+        alignments: ["left"],
+      },
+      {
+        kind: "table",
+        header: [[{ text: "B" }]],
+        rows: [[[{ text: "r2" }]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
+
+  it("places an image inside a header cell", () => {
+    // flattenInline is called on every inline token in a table, including
+    // header cells, so images are handled identically to body-cell text.
+    const src = "| ![logo](https://x/a.png) |\n| --- |\n| text |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ src: "https://x/a.png", alt: "logo" }]],
+        rows: [[[{ text: "text" }]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — images", () => {
@@ -908,6 +948,17 @@ describe("parseMarkdown — images", () => {
       {
         kind: "paragraph",
         runs: [{ src: "https://x/a.png", alt: "logo" }],
+      },
+    ]);
+  });
+
+  it("drops the outer link when an image is wrapped in a link", () => {
+    // [![alt](src)](href) — link_open sets s.link but Image has no link
+    // field, so the href is silently discarded; only the image survives.
+    expect(parseMarkdown("[![logo](https://x/img.png)](https://x)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ src: "https://x/img.png", alt: "logo" }],
       },
     ]);
   });
