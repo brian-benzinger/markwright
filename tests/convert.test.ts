@@ -53,6 +53,13 @@ describe("parseMarkdown — block shape", () => {
     // an empty heading block.
     expect(parseMarkdown("#")).toEqual([]);
   });
+
+  it("drops a top-level paragraph whose inline content resolves to no runs", () => {
+    // [](url) produces link_open/link_close with no text child, so
+    // flattenInline returns []; with checked === undefined the guard at the
+    // paragraph_open branch silently skips it.
+    expect(parseMarkdown("[](url)")).toEqual([]);
+  });
 });
 
 describe("parseMarkdown — inline marks", () => {
@@ -378,6 +385,14 @@ describe("parseMarkdown — lists", () => {
     ]);
   });
 
+  it("drops a list item whose inline content resolves to no runs and has no task marker", () => {
+    // [](url) inside a list item: consumeTaskPrefix returns undefined (first
+    // child is link_open, not text), flattenInline returns [] — both arms of
+    // the `runs.length === 0 && checked === undefined` guard are true, so the
+    // item is silently skipped.
+    expect(parseMarkdown("- [](url)")).toEqual([]);
+  });
+
   it("emits each paragraph in a loose list item as a separate listItem block", () => {
     // A loose list (blank lines between items) wraps item text in
     // paragraph_open tokens. A continuation paragraph within the same
@@ -483,6 +498,16 @@ describe("parseMarkdown — code blocks", () => {
       { kind: "paragraph", runs: [{ text: "before" }] },
       { kind: "codeBlock", content: "code\n" },
       { kind: "paragraph", runs: [{ text: "after" }] },
+    ]);
+  });
+
+  it("emits a fenced code block inside a list item as a standalone codeBlock", () => {
+    // Unlike tables (which are gated on listStack.length === 0), the fence
+    // handler has no list guard — code fences inside list items fall through
+    // and are emitted as top-level codeBlock blocks after their list item.
+    expect(parseMarkdown("- item\n\n  ```\n  code\n  ```")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "item" }] },
+      { kind: "codeBlock", content: "code\n" },
     ]);
   });
 });
@@ -729,6 +754,16 @@ describe("parseMarkdown — blockquotes", () => {
     ]);
   });
 
+  it("preserves a link inside a blockquote", () => {
+    expect(parseMarkdown("> see [docs](https://example.com) here")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "see " }, { text: "docs", link: "https://example.com" }, { text: " here" }],
+        quoteDepth: 1,
+      },
+    ]);
+  });
+
   it("converts a hard line break inside a blockquote to U+000B", () => {
     // Two trailing spaces before a continued blockquote line produce a hardbreak
     // token that flattenInline converts to "\v", same as in a plain paragraph.
@@ -898,6 +933,20 @@ describe("parseMarkdown — tables", () => {
         kind: "table",
         header: [[{ src: "https://x/a.png", alt: "logo" }]],
         rows: [[[{ text: "text" }]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
+
+  it("places an image inside a table body cell", () => {
+    // flattenInline is called for every inline token including body-cell
+    // inline tokens, so images in body cells are handled the same way.
+    const src = "| header |\n| --- |\n| ![logo](https://x/a.png) |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "header" }]],
+        rows: [[[{ src: "https://x/a.png", alt: "logo" }]]],
         alignments: ["left"],
       },
     ]);
