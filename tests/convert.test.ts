@@ -213,6 +213,37 @@ describe("parseMarkdown — inline marks", () => {
       },
     ]);
   });
+
+  it("composes a link and italic into a single italic-link run", () => {
+    expect(parseMarkdown("[*italic link*](https://x)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "italic link", italic: true, link: "https://x" }],
+      },
+    ]);
+  });
+
+  it("composes a link with bold and italic into a single run carrying all three marks", () => {
+    expect(parseMarkdown("[***bold italic link***](https://x)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "bold italic link", bold: true, italic: true, link: "https://x" }],
+      },
+    ]);
+  });
+
+  it("composes italic and inline code in a single run", () => {
+    expect(parseMarkdown("*italic `code` italic*")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          { text: "italic ", italic: true },
+          { text: "code", italic: true, code: true },
+          { text: " italic", italic: true },
+        ],
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — lists", () => {
