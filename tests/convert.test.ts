@@ -365,6 +365,49 @@ describe("parseMarkdown — lists", () => {
       { kind: "listItem", ordered: true, depth: 0, listId: 2, runs: [{ text: "one" }] },
     ]);
   });
+
+  it("applies strikethrough inside a list item", () => {
+    expect(parseMarkdown("- ~~struck~~ item")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "struck", strike: true }, { text: " item" }],
+      },
+    ]);
+  });
+
+  it("emits each paragraph in a loose list item as a separate listItem block", () => {
+    // A loose list (blank lines between items) wraps item text in
+    // paragraph_open tokens. A continuation paragraph within the same
+    // list_item_open…close is therefore emitted as a second listItem at
+    // the same depth and listId, because the parser treats every
+    // paragraph_open inside a list as one list-item block.
+    expect(parseMarkdown("- item one\n\n  continued\n\n- item two")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "item one" }],
+      },
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "continued" }],
+      },
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "item two" }],
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — thematic breaks", () => {
@@ -959,6 +1002,16 @@ describe("parseMarkdown — images", () => {
       {
         kind: "paragraph",
         runs: [{ src: "https://x/img.png", alt: "logo" }],
+      },
+    ]);
+  });
+
+  it("places an inline image inside a heading alongside text runs", () => {
+    expect(parseMarkdown("# lead ![logo](https://x/icon.png) text")).toEqual([
+      {
+        kind: "heading",
+        level: 1,
+        runs: [{ text: "lead " }, { src: "https://x/icon.png", alt: "logo" }, { text: " text" }],
       },
     ]);
   });
