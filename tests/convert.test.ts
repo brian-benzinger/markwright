@@ -217,6 +217,30 @@ describe("parseMarkdown — inline marks", () => {
     ]);
   });
 
+  it("merges two adjacent link runs pointing to the same URL", () => {
+    // [a](url)[b](url) with no separator produces link_open/text/link_close
+    // twice in a row. pushRun checks sameFormat (including a.link === b.link)
+    // and merges them into one run so the applier doesn't create two identical
+    // hyperlink runs back-to-back.
+    expect(parseMarkdown("[a](https://x.com)[b](https://x.com)")).toEqual([
+      { kind: "paragraph", runs: [{ text: "ab", link: "https://x.com" }] },
+    ]);
+  });
+
+  it("does not merge adjacent link runs pointing to different URLs", () => {
+    // sameFormat returns false when a.link !== b.link, so pushRun appends
+    // rather than merging — each href must stay bound to its own text.
+    expect(parseMarkdown("[a](https://x.com)[b](https://y.com)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          { text: "a", link: "https://x.com" },
+          { text: "b", link: "https://y.com" },
+        ],
+      },
+    ]);
+  });
+
   it("composes bold and inline code in a single run", () => {
     expect(parseMarkdown("**bold `code` bold**")).toEqual([
       {
