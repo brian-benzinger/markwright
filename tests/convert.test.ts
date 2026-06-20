@@ -126,6 +126,13 @@ describe("parseMarkdown — inline marks", () => {
     ]);
   });
 
+  it("drops an empty href and emits the link text as a plain run", () => {
+    // [text]() produces link_open with href:"". Empty string is falsy so
+    // makeRun's `if (s.link)` guard never sets run.link — the href is
+    // silently discarded and only the text survives.
+    expect(parseMarkdown("[text]()")).toEqual([{ kind: "paragraph", runs: [{ text: "text" }] }]);
+  });
+
   it("parses an autolink as a link with text == href", () => {
     expect(parseMarkdown("at <https://example.com>")).toEqual([
       {
@@ -464,6 +471,30 @@ describe("parseMarkdown — lists", () => {
     expect(parseMarkdown("- [](url)")).toEqual([]);
   });
 
+  it("treats an ordered list starting at a non-1 number as ordered (start number is ignored in the AST)", () => {
+    // markdown-it captures the start attribute on ordered_list_open but our
+    // AST has no start-number field — only ordered:true/false. The items are
+    // still emitted correctly with the same listId.
+    expect(parseMarkdown("3. third\n4. fourth")).toEqual([
+      { kind: "listItem", ordered: true, depth: 0, listId: 1, runs: [{ text: "third" }] },
+      { kind: "listItem", ordered: true, depth: 0, listId: 1, runs: [{ text: "fourth" }] },
+    ]);
+  });
+
+  it("linkifies a bare URL inside a bullet list item to a link run", () => {
+    // linkify:true is global; a bare URL inside a list item goes through
+    // flattenInline's link_open/link_close path, same as in a plain paragraph.
+    expect(parseMarkdown("- https://example.com")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "https://example.com", link: "https://example.com" }],
+      },
+    ]);
+  });
+
   it("emits each paragraph in a loose list item as a separate listItem block", () => {
     // A loose list (blank lines between items) wraps item text in
     // paragraph_open tokens. A continuation paragraph within the same
@@ -729,6 +760,14 @@ describe("parseMarkdown — task lists", () => {
     ]);
   });
 
+  it("does not strip a task-marker prefix from a top-level paragraph (stripping is list-scoped)", () => {
+    // consumeTaskPrefix is only called when listStack.length > 0, so `[ ]`
+    // at the start of a plain paragraph is literal text, not a task marker.
+    expect(parseMarkdown("[ ] not in a list")).toEqual([
+      { kind: "paragraph", runs: [{ text: "[ ] not in a list" }] },
+    ]);
+  });
+
   it("correctly strips a task marker with no space between ] and the item text", () => {
     // The regex uses `] ?` (optional trailing space) so `[x]done` is valid.
     expect(parseMarkdown("- [x]done")).toEqual([
@@ -818,6 +857,14 @@ describe("parseMarkdown — blockquotes", () => {
     expect(parseMarkdown("> outer\n>\n> > inner")).toEqual([
       { kind: "paragraph", runs: [{ text: "outer" }], quoteDepth: 1 },
       { kind: "paragraph", runs: [{ text: "inner" }], quoteDepth: 2 },
+    ]);
+  });
+
+  it("emits quoteDepth: 3 for a triple-nested blockquote", () => {
+    // blockquoteDepth accumulates one increment per blockquote_open token,
+    // so three levels of `>` produce quoteDepth: 3.
+    expect(parseMarkdown(">>> deep")).toEqual([
+      { kind: "paragraph", runs: [{ text: "deep" }], quoteDepth: 3 },
     ]);
   });
 
