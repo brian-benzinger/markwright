@@ -262,6 +262,28 @@ describe("parseMarkdown — inline marks", () => {
       },
     ]);
   });
+
+  it("composes inline code and a link in a single run", () => {
+    // link_open sets s.link; code_inline carries code:true — both land on the
+    // same run because makeRun reads the full InlineState at push time.
+    expect(parseMarkdown("[`code`](https://x)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "code", code: true, link: "https://x" }],
+      },
+    ]);
+  });
+
+  it("composes bold and strikethrough in a single run", () => {
+    // strong_open sets boldDepth; s_open sets strikeDepth — both are non-zero
+    // when the text token is consumed, so makeRun captures both flags.
+    expect(parseMarkdown("**~~struck bold~~**")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "struck bold", bold: true, strike: true }],
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — lists", () => {
@@ -864,6 +886,19 @@ describe("parseMarkdown — blockquotes", () => {
     // tokens but no text child, so flattenInline returns []. The guard
     // silently skips emitting an empty paragraph block.
     expect(parseMarkdown("> [](url)")).toEqual([]);
+  });
+
+  it("captures the title attribute on an image inside a blockquote", () => {
+    // The if(title) branch of flattenInline's image case is exercised here
+    // in the blockquote context to confirm title is captured regardless of
+    // which block path calls flattenInline.
+    expect(parseMarkdown('> ![alt](https://x/img.png "tooltip")')).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ src: "https://x/img.png", alt: "alt", title: "tooltip" }],
+        quoteDepth: 1,
+      },
+    ]);
   });
 
   it("preserves strikethrough inside a blockquote", () => {
