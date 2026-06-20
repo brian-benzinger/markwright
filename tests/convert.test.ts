@@ -153,6 +153,14 @@ describe("parseMarkdown — inline marks", () => {
     ]);
   });
 
+  it("converts a hard line break (backslash at end of line) to U+000B", () => {
+    // Backslash+newline is the alternative GFM syntax for hardbreak;
+    // markdown-it emits the same hardbreak token as two trailing spaces.
+    expect(parseMarkdown("line one\\\nline two")).toEqual([
+      { kind: "paragraph", runs: [{ text: "line one\vline two" }] },
+    ]);
+  });
+
   it("applies marks inside headings", () => {
     expect(parseMarkdown("# **bold** heading")).toEqual([
       {
@@ -1057,6 +1065,34 @@ describe("parseMarkdown — tables", () => {
         header: [[{ text: "H1" }], [{ text: "H2" }]],
         rows: [],
         alignments: ["left", "left"],
+      },
+    ]);
+  });
+
+  it("preserves italic inside a table body cell", () => {
+    // em_open/em_close are handled by flattenInline regardless of call site;
+    // this guards against a regression where italic is stripped in table cells.
+    const src = "| H |\n| --- |\n| *slanted* |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "H" }]],
+        rows: [[[{ text: "slanted", italic: true }]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
+
+  it("preserves strikethrough inside a table body cell", () => {
+    // s_open/s_close are handled by flattenInline regardless of call site;
+    // this guards against a regression where strikethrough is dropped in cells.
+    const src = "| H |\n| --- |\n| ~~struck~~ |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "H" }]],
+        rows: [[[{ text: "struck", strike: true }]]],
+        alignments: ["left"],
       },
     ]);
   });
