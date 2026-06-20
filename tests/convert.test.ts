@@ -173,6 +173,16 @@ describe("parseMarkdown — inline marks", () => {
     ]);
   });
 
+  it("applies a link inside a heading", () => {
+    expect(parseMarkdown("# see [docs](https://example.com) here")).toEqual([
+      {
+        kind: "heading",
+        level: 1,
+        runs: [{ text: "see " }, { text: "docs", link: "https://example.com" }, { text: " here" }],
+      },
+    ]);
+  });
+
   it("combines strikethrough and link in a single run", () => {
     // link_open sets s.link; s_open sets s.strikeDepth — both flags land on
     // the same run because flattenInline reads the full InlineState at push time.
@@ -702,6 +712,22 @@ describe("parseMarkdown — task lists", () => {
       },
     ]);
   });
+
+  it("detects a task marker in a nested list item (depth 1)", () => {
+    // consumeTaskPrefix is called for every paragraph_open inside a list,
+    // regardless of nesting depth — the depth comes from listStack.length.
+    expect(parseMarkdown("- top\n  - [ ] sub task")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "top" }] },
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 1,
+        listId: 1,
+        runs: [{ text: "sub task" }],
+        checked: false,
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — bare-URL autolinks", () => {
@@ -846,6 +872,16 @@ describe("parseMarkdown — blockquotes", () => {
       {
         kind: "paragraph",
         runs: [{ text: "https://example.com", link: "https://example.com" }],
+        quoteDepth: 1,
+      },
+    ]);
+  });
+
+  it("preserves inline code inside a blockquote", () => {
+    expect(parseMarkdown("> call `foo()` now")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "call " }, { text: "foo()", code: true }, { text: " now" }],
         quoteDepth: 1,
       },
     ]);
