@@ -1096,6 +1096,51 @@ describe("parseMarkdown — tables", () => {
       },
     ]);
   });
+
+  it("preserves inline code in a header cell", () => {
+    // code_inline is tested in body cells ("preserves inline marks inside cells")
+    // but not header cells; both go through flattenInline so the path is shared,
+    // but this guards against a regression where header cell content is handled
+    // differently from body cell content.
+    const src = "| `code` | Plain |\n| --- | --- |\n| a | b |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "code", code: true }], [{ text: "Plain" }]],
+        rows: [[[{ text: "a" }], [{ text: "b" }]]],
+        alignments: ["left", "left"],
+      },
+    ]);
+  });
+
+  it("linkifies a bare URL in a table body cell", () => {
+    // linkify:true is active globally; bare URLs in cells go through the same
+    // link_open/link_close path in flattenInline as explicit [text](url) syntax.
+    const src = "| H |\n| --- |\n| https://example.com |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "H" }]],
+        rows: [[[{ text: "https://example.com", link: "https://example.com" }]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
+
+  it("preserves an image title inside a table body cell", () => {
+    // The if (title) branch of flattenInline's image case is exercised here
+    // in the table cell context, verifying the title attribute is captured
+    // regardless of which block context calls flattenInline.
+    const src = '| H |\n| --- |\n| ![alt](https://x/img.png "tooltip") |';
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "H" }]],
+        rows: [[[{ src: "https://x/img.png", alt: "alt", title: "tooltip" }]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — images", () => {
