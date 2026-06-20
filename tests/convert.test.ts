@@ -837,6 +837,19 @@ describe("parseMarkdown — blockquotes", () => {
       { kind: "paragraph", runs: [{ text: "struck", strike: true }], quoteDepth: 1 },
     ]);
   });
+
+  it("autolinks a bare URL inside a blockquote to a link run", () => {
+    // linkify: true is set globally, so bare URLs inside blockquotes are
+    // turned into link_open/link_close tokens before flattenInline runs —
+    // the quoted paragraph emerges with a proper link run, not raw text.
+    expect(parseMarkdown("> https://example.com")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "https://example.com", link: "https://example.com" }],
+        quoteDepth: 1,
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — tables", () => {
@@ -979,6 +992,35 @@ describe("parseMarkdown — tables", () => {
         header: [[{ text: "header" }]],
         rows: [[[{ src: "https://x/a.png", alt: "logo" }]]],
         alignments: ["left"],
+      },
+    ]);
+  });
+
+  it("places a link inside a table body cell", () => {
+    // Link handling in body cells goes through the same flattenInline path
+    // as header cells. Explicit body-cell test guards against a regression
+    // where body content is flattened differently from header content.
+    const src = "| Header |\n| --- |\n| [click](https://x) |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "Header" }]],
+        rows: [[[{ text: "click", link: "https://x" }]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
+
+  it("produces an empty rows array for a header-only table", () => {
+    // GFM allows a table with a header row and delimiter but no body rows.
+    // The parser must emit rows: [] rather than rows: undefined or crash.
+    const src = "| H1 | H2 |\n| --- | --- |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "H1" }], [{ text: "H2" }]],
+        rows: [],
+        alignments: ["left", "left"],
       },
     ]);
   });
