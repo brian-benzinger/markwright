@@ -636,6 +636,14 @@ describe("parseMarkdown — code blocks", () => {
       { kind: "codeBlock", content: "code\n" },
     ]);
   });
+
+  it("parses a tilde-delimited fence identically to a backtick fence", () => {
+    // markdown-it accepts ~~~ as an alternative fence delimiter; both produce
+    // a `fence` token with the same shape, so the parser treats them the same.
+    expect(parseMarkdown("~~~javascript\nfoo();\n~~~")).toEqual([
+      { kind: "codeBlock", content: "foo();\n", language: "javascript" },
+    ]);
+  });
 });
 
 describe("parseMarkdown — task lists", () => {
@@ -842,6 +850,18 @@ describe("parseMarkdown — bare-URL autolinks", () => {
           { text: "https://example.com", link: "https://example.com" },
           { text: " today" },
         ],
+      },
+    ]);
+  });
+
+  it("autolinks a bare URL inside a heading to a link run", () => {
+    // linkify: true is a global md option; headings share the same
+    // flattenInline path as paragraphs, so bare URLs become link runs there too.
+    expect(parseMarkdown("# https://example.com")).toEqual([
+      {
+        kind: "heading",
+        level: 1,
+        runs: [{ text: "https://example.com", link: "https://example.com" }],
       },
     ]);
   });
@@ -1243,6 +1263,20 @@ describe("parseMarkdown — tables", () => {
         kind: "table",
         header: [[{ text: "H" }]],
         rows: [[[{ src: "https://x/img.png", alt: "alt", title: "tooltip" }]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
+
+  it("produces an empty runs array for an empty table body cell", () => {
+    // A cell with only whitespace has no inline children; flattenInline returns
+    // [] and the cell is represented as an empty runs array in the AST.
+    const src = "| H |\n| --- |\n| |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "H" }]],
+        rows: [[[]]],
         alignments: ["left"],
       },
     ]);
