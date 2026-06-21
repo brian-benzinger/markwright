@@ -315,6 +315,16 @@ describe("parseMarkdown — inline marks", () => {
       },
     ]);
   });
+
+  it("silently drops the title attribute from a link (only href is captured)", () => {
+    // link_open only reads `href`; `title` is intentionally ignored because
+    // Word link objects have no title concept. This is the opposite of images,
+    // which DO capture title. Guard against a future change that accidentally
+    // surfaces the title into a run field or as a block property.
+    expect(parseMarkdown('[text](https://x.com "tooltip")')).toEqual([
+      { kind: "paragraph", runs: [{ text: "text", link: "https://x.com" }] },
+    ]);
+  });
 });
 
 describe("parseMarkdown — lists", () => {
