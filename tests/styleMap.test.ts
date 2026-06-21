@@ -6,6 +6,24 @@ import {
   type StyleMap,
 } from "../src/convert/styleMap";
 
+describe("STYLE_TARGETS", () => {
+  it("contains exactly the 9 mappable block constructs in display order", () => {
+    // The UI iterates STYLE_TARGETS to render the mapping rows, so order
+    // matters: headings first (1..6), then paragraph, blockquote, codeBlock.
+    expect(STYLE_TARGETS).toEqual([
+      "heading1",
+      "heading2",
+      "heading3",
+      "heading4",
+      "heading5",
+      "heading6",
+      "paragraph",
+      "blockquote",
+      "codeBlock",
+    ]);
+  });
+});
+
 describe("defaultStyleMap", () => {
   it("binds every target, headings to Heading 1..6 and the rest to Normal/Quote", () => {
     const map = defaultStyleMap();
@@ -69,6 +87,21 @@ describe("mergeStyleMap", () => {
   it("ignores keys that are not style targets", () => {
     const map: StyleMap = mergeStyleMap({ notATarget: { custom: "X" } });
     expect(map).toEqual(defaultStyleMap());
+  });
+
+  it("prefers builtIn over custom when both keys are present in the same entry", () => {
+    // asStyleChoice checks "builtIn" in value first, so an entry carrying both
+    // keys resolves as builtIn rather than custom. This matches Settings-store
+    // objects that may accumulate stale keys across schema changes.
+    const map = mergeStyleMap({ paragraph: { builtIn: "quote", custom: "My Style" } });
+    expect(map.paragraph).toEqual({ builtIn: "quote" });
+  });
+
+  it("does not mutate the persisted argument", () => {
+    const persisted = { paragraph: { builtIn: "quote" } };
+    const snapshot = JSON.parse(JSON.stringify(persisted)) as unknown;
+    mergeStyleMap(persisted);
+    expect(persisted).toEqual(snapshot);
   });
 
   it("round-trips a fully customised map through JSON", () => {
