@@ -1030,6 +1030,17 @@ describe("parseMarkdown — blockquotes", () => {
       },
     ]);
   });
+
+  it("treats a task marker inside a blockquote list item as literal text", () => {
+    // Task detection (consumeTaskPrefix) runs only when listStack.length > 0,
+    // which is never true inside a blockquote: bullet_list_open inside a
+    // blockquote is skipped by the `blockquoteDepth > 0` continue, so listStack
+    // is never pushed. The `[ ] ` prefix therefore survives into the run as
+    // plain text rather than being stripped and setting checked.
+    expect(parseMarkdown("> - [ ] not a task")).toEqual([
+      { kind: "paragraph", runs: [{ text: "[ ] not a task" }], quoteDepth: 1 },
+    ]);
+  });
 });
 
 describe("parseMarkdown — tables", () => {
@@ -1291,6 +1302,37 @@ describe("parseMarkdown — tables", () => {
       },
     ]);
   });
+
+  it("preserves strikethrough inside a table header cell", () => {
+    // s_open/s_close are handled by flattenInline regardless of call site.
+    // Header cells go through the same path as body cells; this guards against
+    // a regression where strikethrough is stripped specifically in headers.
+    const src = "| ~~struck~~ | Plain |\n| --- | --- |\n| a | b |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "struck", strike: true }], [{ text: "Plain" }]],
+        rows: [[[{ text: "a" }], [{ text: "b" }]]],
+        alignments: ["left", "left"],
+      },
+    ]);
+  });
+
+  it("linkifies a bare URL in a table header cell", () => {
+    // linkify:true is active globally; bare URLs in header cells go through the
+    // same link_open/link_close path in flattenInline as body cells — this
+    // guards against a regression where header cell content is flattened by a
+    // different code branch that omits the link handling.
+    const src = "| https://example.com |\n| --- |\n| body |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "https://example.com", link: "https://example.com" }]],
+        rows: [[[{ text: "body" }]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — images", () => {
@@ -1401,6 +1443,20 @@ describe("parseMarkdown — images", () => {
         kind: "heading",
         level: 1,
         runs: [{ text: "lead " }, { src: "https://x/icon.png", alt: "logo" }, { text: " text" }],
+      },
+    ]);
+  });
+
+  it("emits a heading whose only content is an image", () => {
+    // `# ![logo](url)` produces a heading_open with a single image in its
+    // inline children. runs.length is 1 (the image), so the `runs.length === 0`
+    // guard does not skip it — the heading block is emitted with the image as
+    // its only run.
+    expect(parseMarkdown("# ![logo](https://x/icon.png)")).toEqual([
+      {
+        kind: "heading",
+        level: 1,
+        runs: [{ src: "https://x/icon.png", alt: "logo" }],
       },
     ]);
   });
