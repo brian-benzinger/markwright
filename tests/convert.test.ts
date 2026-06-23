@@ -168,6 +168,23 @@ describe("parseMarkdown — inline marks", () => {
     ]);
   });
 
+  it("merges a softbreak inside a link into one linked run", () => {
+    // link_open sets s.link; the softbreak emits " " with that same link, so
+    // sameFormat holds across text + space + text and pushRun collapses all
+    // three into a single run.
+    expect(parseMarkdown("[one\ntwo](https://x)")).toEqual([
+      { kind: "paragraph", runs: [{ text: "one two", link: "https://x" }] },
+    ]);
+  });
+
+  it("embeds \\v in a linked run for a hard line break inside link text", () => {
+    // The hardbreak token emits "\v" with s.link still set, so sameFormat
+    // holds and pushRun merges text + "\v" + text into a single linked run.
+    expect(parseMarkdown("[one  \ntwo](https://x)")).toEqual([
+      { kind: "paragraph", runs: [{ text: "one\vtwo", link: "https://x" }] },
+    ]);
+  });
+
   it("applies marks inside headings", () => {
     expect(parseMarkdown("# **bold** heading")).toEqual([
       {
@@ -839,6 +856,22 @@ describe("parseMarkdown — task lists", () => {
       },
     ]);
   });
+
+  it("strips the task marker before a mixed image-and-text item", () => {
+    // consumeTaskPrefix sees "[ ] " as the first text child and strips it
+    // (setting first.content to ""); flattenInline then skips that empty
+    // text token and emits the image and trailing text as the item's runs.
+    expect(parseMarkdown("- [ ] ![icon](https://x/icon.png) label")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ src: "https://x/icon.png", alt: "icon" }, { text: " label" }],
+        checked: false,
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — bare-URL autolinks", () => {
@@ -1386,6 +1419,22 @@ describe("parseMarkdown — images", () => {
       {
         kind: "paragraph",
         runs: [{ text: "a " }, { src: "u", alt: "" }, { text: " b" }],
+      },
+    ]);
+  });
+
+  it("keeps two adjacent images as separate entries separated by a text run", () => {
+    // Images are pushed via out.push() directly, never through pushRun, so
+    // they can never be coalesced. The literal space between them becomes its
+    // own plain-text run, distinct from both images.
+    expect(parseMarkdown("![a](https://x/a.png) ![b](https://x/b.png)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          { src: "https://x/a.png", alt: "a" },
+          { text: " " },
+          { src: "https://x/b.png", alt: "b" },
+        ],
       },
     ]);
   });
