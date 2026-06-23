@@ -576,6 +576,31 @@ describe("parseMarkdown — lists", () => {
       },
     ]);
   });
+
+  it("treats * as a bullet marker identically to -", () => {
+    // markdown-it normalises all GFM bullet markers (-, *, +) to the same
+    // bullet_list_open token type, so the parser never sees the original char.
+    expect(parseMarkdown("* item")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "item" }] },
+    ]);
+  });
+
+  it("treats + as a bullet marker identically to -", () => {
+    expect(parseMarkdown("+ item")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "item" }] },
+    ]);
+  });
+
+  it("tracks depth: 2 for a third nesting level", () => {
+    // listStack grows one entry per bullet_list_open; depth = stack.length - 1.
+    // Two nested open tokens produce stack.length === 3 → depth 2 for the
+    // innermost item.
+    expect(parseMarkdown("- top\n  - mid\n    - deep")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "top" }] },
+      { kind: "listItem", ordered: false, depth: 1, listId: 1, runs: [{ text: "mid" }] },
+      { kind: "listItem", ordered: false, depth: 2, listId: 1, runs: [{ text: "deep" }] },
+    ]);
+  });
 });
 
 describe("parseMarkdown — thematic breaks", () => {
@@ -670,6 +695,13 @@ describe("parseMarkdown — code blocks", () => {
     expect(parseMarkdown("~~~javascript\nfoo();\n~~~")).toEqual([
       { kind: "codeBlock", content: "foo();\n", language: "javascript" },
     ]);
+  });
+
+  it("treats a whitespace-only fence info string as no language", () => {
+    // markdown-it preserves spaces in t.info; our code does t.info.trim() which
+    // collapses all-whitespace info to "", which is falsy — so language stays
+    // undefined rather than emitting an empty-string language field.
+    expect(parseMarkdown("```   \ncode\n```")).toEqual([{ kind: "codeBlock", content: "code\n" }]);
   });
 });
 
