@@ -601,6 +601,30 @@ describe("parseMarkdown — lists", () => {
       { kind: "listItem", ordered: false, depth: 2, listId: 1, runs: [{ text: "deep" }] },
     ]);
   });
+
+  it("tracks ordered: true for an ordered list nested inside an ordered list", () => {
+    // ordered_list_open pushes {ordered:true} twice; stack[stack.length-1].ordered
+    // is true at both depth 0 and depth 1. Contrasts with the bullet-in-ordered
+    // test where the outer item is ordered:false.
+    expect(parseMarkdown("1. outer\n   1. inner\n2. back")).toEqual([
+      { kind: "listItem", ordered: true, depth: 0, listId: 1, runs: [{ text: "outer" }] },
+      { kind: "listItem", ordered: true, depth: 1, listId: 1, runs: [{ text: "inner" }] },
+      { kind: "listItem", ordered: true, depth: 0, listId: 1, runs: [{ text: "back" }] },
+    ]);
+  });
+
+  it("assigns sequential listIds to three or more separate top-level lists", () => {
+    // listIdCounter increments each time a top-level list opens (listStack empty).
+    // Verify the counter keeps advancing beyond 2 so the applier never reuses a
+    // list scope that has already been closed.
+    expect(parseMarkdown("- a\n\nparagraph\n\n- b\n\nparagraph\n\n- c")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "a" }] },
+      { kind: "paragraph", runs: [{ text: "paragraph" }] },
+      { kind: "listItem", ordered: false, depth: 0, listId: 2, runs: [{ text: "b" }] },
+      { kind: "paragraph", runs: [{ text: "paragraph" }] },
+      { kind: "listItem", ordered: false, depth: 0, listId: 3, runs: [{ text: "c" }] },
+    ]);
+  });
 });
 
 describe("parseMarkdown — thematic breaks", () => {
@@ -938,6 +962,15 @@ describe("parseMarkdown — bare-URL autolinks", () => {
         level: 1,
         runs: [{ text: "https://example.com", link: "https://example.com" }],
       },
+    ]);
+  });
+
+  it("does not linkify a URL wrapped in backticks (inline code suppresses linkify)", () => {
+    // markdown-it's backtick rule runs before linkify so a URL inside code
+    // ticks is captured as a code_inline token and never passes through the
+    // link-open path. The run must carry code:true and no link field.
+    expect(parseMarkdown("`https://example.com`")).toEqual([
+      { kind: "paragraph", runs: [{ text: "https://example.com", code: true }] },
     ]);
   });
 });
