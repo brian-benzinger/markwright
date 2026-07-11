@@ -126,6 +126,13 @@ describe("parseMarkdown — inline marks", () => {
     ]);
   });
 
+  it("drops an empty href and emits the link text as a plain run", () => {
+    // [text]() produces link_open with href:"". Empty string is falsy so
+    // makeRun's `if (s.link)` guard never sets run.link — the href is
+    // silently discarded and only the text survives.
+    expect(parseMarkdown("[text]()")).toEqual([{ kind: "paragraph", runs: [{ text: "text" }] }]);
+  });
+
   it("parses an autolink as a link with text == href", () => {
     expect(parseMarkdown("at <https://example.com>")).toEqual([
       {
@@ -158,6 +165,23 @@ describe("parseMarkdown — inline marks", () => {
     // markdown-it emits the same hardbreak token as two trailing spaces.
     expect(parseMarkdown("line one\\\nline two")).toEqual([
       { kind: "paragraph", runs: [{ text: "line one\vline two" }] },
+    ]);
+  });
+
+  it("merges a softbreak inside a link into one linked run", () => {
+    // link_open sets s.link; the softbreak emits " " with that same link, so
+    // sameFormat holds across text + space + text and pushRun collapses all
+    // three into a single run.
+    expect(parseMarkdown("[one\ntwo](https://x)")).toEqual([
+      { kind: "paragraph", runs: [{ text: "one two", link: "https://x" }] },
+    ]);
+  });
+
+  it("embeds \\v in a linked run for a hard line break inside link text", () => {
+    // The hardbreak token emits "\v" with s.link still set, so sameFormat
+    // holds and pushRun merges text + "\v" + text into a single linked run.
+    expect(parseMarkdown("[one  \ntwo](https://x)")).toEqual([
+      { kind: "paragraph", runs: [{ text: "one\vtwo", link: "https://x" }] },
     ]);
   });
 
@@ -207,6 +231,30 @@ describe("parseMarkdown — inline marks", () => {
     // (text, space, text) — they should collapse into one.
     expect(parseMarkdown("**one\ntwo**")).toEqual([
       { kind: "paragraph", runs: [{ text: "one two", bold: true }] },
+    ]);
+  });
+
+  it("merges two adjacent link runs pointing to the same URL", () => {
+    // [a](url)[b](url) with no separator produces link_open/text/link_close
+    // twice in a row. pushRun checks sameFormat (including a.link === b.link)
+    // and merges them into one run so the applier doesn't create two identical
+    // hyperlink runs back-to-back.
+    expect(parseMarkdown("[a](https://x.com)[b](https://x.com)")).toEqual([
+      { kind: "paragraph", runs: [{ text: "ab", link: "https://x.com" }] },
+    ]);
+  });
+
+  it("does not merge adjacent link runs pointing to different URLs", () => {
+    // sameFormat returns false when a.link !== b.link, so pushRun appends
+    // rather than merging — each href must stay bound to its own text.
+    expect(parseMarkdown("[a](https://x.com)[b](https://y.com)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          { text: "a", link: "https://x.com" },
+          { text: "b", link: "https://y.com" },
+        ],
+      },
     ]);
   });
 
@@ -282,6 +330,16 @@ describe("parseMarkdown — inline marks", () => {
         kind: "paragraph",
         runs: [{ text: "struck bold", bold: true, strike: true }],
       },
+    ]);
+  });
+
+  it("silently drops the title attribute from a link (only href is captured)", () => {
+    // link_open only reads `href`; `title` is intentionally ignored because
+    // Word link objects have no title concept. This is the opposite of images,
+    // which DO capture title. Guard against a future change that accidentally
+    // surfaces the title into a run field or as a block property.
+    expect(parseMarkdown('[text](https://x.com "tooltip")')).toEqual([
+      { kind: "paragraph", runs: [{ text: "text", link: "https://x.com" }] },
     ]);
   });
 });
@@ -464,6 +522,30 @@ describe("parseMarkdown — lists", () => {
     expect(parseMarkdown("- [](url)")).toEqual([]);
   });
 
+  it("treats an ordered list starting at a non-1 number as ordered (start number is ignored in the AST)", () => {
+    // markdown-it captures the start attribute on ordered_list_open but our
+    // AST has no start-number field — only ordered:true/false. The items are
+    // still emitted correctly with the same listId.
+    expect(parseMarkdown("3. third\n4. fourth")).toEqual([
+      { kind: "listItem", ordered: true, depth: 0, listId: 1, runs: [{ text: "third" }] },
+      { kind: "listItem", ordered: true, depth: 0, listId: 1, runs: [{ text: "fourth" }] },
+    ]);
+  });
+
+  it("linkifies a bare URL inside a bullet list item to a link run", () => {
+    // linkify:true is global; a bare URL inside a list item goes through
+    // flattenInline's link_open/link_close path, same as in a plain paragraph.
+    expect(parseMarkdown("- https://example.com")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ text: "https://example.com", link: "https://example.com" }],
+      },
+    ]);
+  });
+
   it("emits each paragraph in a loose list item as a separate listItem block", () => {
     // A loose list (blank lines between items) wraps item text in
     // paragraph_open tokens. A continuation paragraph within the same
@@ -492,6 +574,55 @@ describe("parseMarkdown — lists", () => {
         listId: 1,
         runs: [{ text: "item two" }],
       },
+    ]);
+  });
+
+  it("treats * as a bullet marker identically to -", () => {
+    // markdown-it normalises all GFM bullet markers (-, *, +) to the same
+    // bullet_list_open token type, so the parser never sees the original char.
+    expect(parseMarkdown("* item")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "item" }] },
+    ]);
+  });
+
+  it("treats + as a bullet marker identically to -", () => {
+    expect(parseMarkdown("+ item")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "item" }] },
+    ]);
+  });
+
+  it("tracks depth: 2 for a third nesting level", () => {
+    // listStack grows one entry per bullet_list_open; depth = stack.length - 1.
+    // Two nested open tokens produce stack.length === 3 → depth 2 for the
+    // innermost item.
+    expect(parseMarkdown("- top\n  - mid\n    - deep")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "top" }] },
+      { kind: "listItem", ordered: false, depth: 1, listId: 1, runs: [{ text: "mid" }] },
+      { kind: "listItem", ordered: false, depth: 2, listId: 1, runs: [{ text: "deep" }] },
+    ]);
+  });
+
+  it("tracks ordered: true for an ordered list nested inside an ordered list", () => {
+    // ordered_list_open pushes {ordered:true} twice; stack[stack.length-1].ordered
+    // is true at both depth 0 and depth 1. Contrasts with the bullet-in-ordered
+    // test where the outer item is ordered:false.
+    expect(parseMarkdown("1. outer\n   1. inner\n2. back")).toEqual([
+      { kind: "listItem", ordered: true, depth: 0, listId: 1, runs: [{ text: "outer" }] },
+      { kind: "listItem", ordered: true, depth: 1, listId: 1, runs: [{ text: "inner" }] },
+      { kind: "listItem", ordered: true, depth: 0, listId: 1, runs: [{ text: "back" }] },
+    ]);
+  });
+
+  it("assigns sequential listIds to three or more separate top-level lists", () => {
+    // listIdCounter increments each time a top-level list opens (listStack empty).
+    // Verify the counter keeps advancing beyond 2 so the applier never reuses a
+    // list scope that has already been closed.
+    expect(parseMarkdown("- a\n\nparagraph\n\n- b\n\nparagraph\n\n- c")).toEqual([
+      { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "a" }] },
+      { kind: "paragraph", runs: [{ text: "paragraph" }] },
+      { kind: "listItem", ordered: false, depth: 0, listId: 2, runs: [{ text: "b" }] },
+      { kind: "paragraph", runs: [{ text: "paragraph" }] },
+      { kind: "listItem", ordered: false, depth: 0, listId: 3, runs: [{ text: "c" }] },
     ]);
   });
 });
@@ -580,6 +711,21 @@ describe("parseMarkdown — code blocks", () => {
       { kind: "listItem", ordered: false, depth: 0, listId: 1, runs: [{ text: "item" }] },
       { kind: "codeBlock", content: "code\n" },
     ]);
+  });
+
+  it("parses a tilde-delimited fence identically to a backtick fence", () => {
+    // markdown-it accepts ~~~ as an alternative fence delimiter; both produce
+    // a `fence` token with the same shape, so the parser treats them the same.
+    expect(parseMarkdown("~~~javascript\nfoo();\n~~~")).toEqual([
+      { kind: "codeBlock", content: "foo();\n", language: "javascript" },
+    ]);
+  });
+
+  it("treats a whitespace-only fence info string as no language", () => {
+    // markdown-it preserves spaces in t.info; our code does t.info.trim() which
+    // collapses all-whitespace info to "", which is falsy — so language stays
+    // undefined rather than emitting an empty-string language field.
+    expect(parseMarkdown("```   \ncode\n```")).toEqual([{ kind: "codeBlock", content: "code\n" }]);
   });
 });
 
@@ -729,6 +875,14 @@ describe("parseMarkdown — task lists", () => {
     ]);
   });
 
+  it("does not strip a task-marker prefix from a top-level paragraph (stripping is list-scoped)", () => {
+    // consumeTaskPrefix is only called when listStack.length > 0, so `[ ]`
+    // at the start of a plain paragraph is literal text, not a task marker.
+    expect(parseMarkdown("[ ] not in a list")).toEqual([
+      { kind: "paragraph", runs: [{ text: "[ ] not in a list" }] },
+    ]);
+  });
+
   it("correctly strips a task marker with no space between ] and the item text", () => {
     // The regex uses `] ?` (optional trailing space) so `[x]done` is valid.
     expect(parseMarkdown("- [x]done")).toEqual([
@@ -758,6 +912,22 @@ describe("parseMarkdown — task lists", () => {
       },
     ]);
   });
+
+  it("strips the task marker before a mixed image-and-text item", () => {
+    // consumeTaskPrefix sees "[ ] " as the first text child and strips it
+    // (setting first.content to ""); flattenInline then skips that empty
+    // text token and emits the image and trailing text as the item's runs.
+    expect(parseMarkdown("- [ ] ![icon](https://x/icon.png) label")).toEqual([
+      {
+        kind: "listItem",
+        ordered: false,
+        depth: 0,
+        listId: 1,
+        runs: [{ src: "https://x/icon.png", alt: "icon" }, { text: " label" }],
+        checked: false,
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — bare-URL autolinks", () => {
@@ -780,6 +950,27 @@ describe("parseMarkdown — bare-URL autolinks", () => {
           { text: " today" },
         ],
       },
+    ]);
+  });
+
+  it("autolinks a bare URL inside a heading to a link run", () => {
+    // linkify: true is a global md option; headings share the same
+    // flattenInline path as paragraphs, so bare URLs become link runs there too.
+    expect(parseMarkdown("# https://example.com")).toEqual([
+      {
+        kind: "heading",
+        level: 1,
+        runs: [{ text: "https://example.com", link: "https://example.com" }],
+      },
+    ]);
+  });
+
+  it("does not linkify a URL wrapped in backticks (inline code suppresses linkify)", () => {
+    // markdown-it's backtick rule runs before linkify so a URL inside code
+    // ticks is captured as a code_inline token and never passes through the
+    // link-open path. The run must carry code:true and no link field.
+    expect(parseMarkdown("`https://example.com`")).toEqual([
+      { kind: "paragraph", runs: [{ text: "https://example.com", code: true }] },
     ]);
   });
 });
@@ -818,6 +1009,14 @@ describe("parseMarkdown — blockquotes", () => {
     expect(parseMarkdown("> outer\n>\n> > inner")).toEqual([
       { kind: "paragraph", runs: [{ text: "outer" }], quoteDepth: 1 },
       { kind: "paragraph", runs: [{ text: "inner" }], quoteDepth: 2 },
+    ]);
+  });
+
+  it("emits quoteDepth: 3 for a triple-nested blockquote", () => {
+    // blockquoteDepth accumulates one increment per blockquote_open token,
+    // so three levels of `>` produce quoteDepth: 3.
+    expect(parseMarkdown(">>> deep")).toEqual([
+      { kind: "paragraph", runs: [{ text: "deep" }], quoteDepth: 3 },
     ]);
   });
 
@@ -927,6 +1126,17 @@ describe("parseMarkdown — blockquotes", () => {
         runs: [{ text: "call " }, { text: "foo()", code: true }, { text: " now" }],
         quoteDepth: 1,
       },
+    ]);
+  });
+
+  it("treats a task marker inside a blockquote list item as literal text", () => {
+    // Task detection (consumeTaskPrefix) runs only when listStack.length > 0,
+    // which is never true inside a blockquote: bullet_list_open inside a
+    // blockquote is skipped by the `blockquoteDepth > 0` continue, so listStack
+    // is never pushed. The `[ ] ` prefix therefore survives into the run as
+    // plain text rather than being stripped and setting checked.
+    expect(parseMarkdown("> - [ ] not a task")).toEqual([
+      { kind: "paragraph", runs: [{ text: "[ ] not a task" }], quoteDepth: 1 },
     ]);
   });
 });
@@ -1176,6 +1386,51 @@ describe("parseMarkdown — tables", () => {
       },
     ]);
   });
+
+  it("produces an empty runs array for an empty table body cell", () => {
+    // A cell with only whitespace has no inline children; flattenInline returns
+    // [] and the cell is represented as an empty runs array in the AST.
+    const src = "| H |\n| --- |\n| |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "H" }]],
+        rows: [[[]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
+
+  it("preserves strikethrough inside a table header cell", () => {
+    // s_open/s_close are handled by flattenInline regardless of call site.
+    // Header cells go through the same path as body cells; this guards against
+    // a regression where strikethrough is stripped specifically in headers.
+    const src = "| ~~struck~~ | Plain |\n| --- | --- |\n| a | b |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "struck", strike: true }], [{ text: "Plain" }]],
+        rows: [[[{ text: "a" }], [{ text: "b" }]]],
+        alignments: ["left", "left"],
+      },
+    ]);
+  });
+
+  it("linkifies a bare URL in a table header cell", () => {
+    // linkify:true is active globally; bare URLs in header cells go through the
+    // same link_open/link_close path in flattenInline as body cells — this
+    // guards against a regression where header cell content is flattened by a
+    // different code branch that omits the link handling.
+    const src = "| https://example.com |\n| --- |\n| body |";
+    expect(parseMarkdown(src)).toEqual([
+      {
+        kind: "table",
+        header: [[{ text: "https://example.com", link: "https://example.com" }]],
+        rows: [[[{ text: "body" }]]],
+        alignments: ["left"],
+      },
+    ]);
+  });
 });
 
 describe("parseMarkdown — images", () => {
@@ -1233,6 +1488,22 @@ describe("parseMarkdown — images", () => {
     ]);
   });
 
+  it("keeps two adjacent images as separate entries separated by a text run", () => {
+    // Images are pushed via out.push() directly, never through pushRun, so
+    // they can never be coalesced. The literal space between them becomes its
+    // own plain-text run, distinct from both images.
+    expect(parseMarkdown("![a](https://x/a.png) ![b](https://x/b.png)")).toEqual([
+      {
+        kind: "paragraph",
+        runs: [
+          { src: "https://x/a.png", alt: "a" },
+          { text: " " },
+          { src: "https://x/b.png", alt: "b" },
+        ],
+      },
+    ]);
+  });
+
   it("works inside list items", () => {
     expect(parseMarkdown("- ![logo](https://x/a.png)")).toEqual([
       {
@@ -1286,6 +1557,20 @@ describe("parseMarkdown — images", () => {
         kind: "heading",
         level: 1,
         runs: [{ text: "lead " }, { src: "https://x/icon.png", alt: "logo" }, { text: " text" }],
+      },
+    ]);
+  });
+
+  it("emits a heading whose only content is an image", () => {
+    // `# ![logo](url)` produces a heading_open with a single image in its
+    // inline children. runs.length is 1 (the image), so the `runs.length === 0`
+    // guard does not skip it — the heading block is emitted with the image as
+    // its only run.
+    expect(parseMarkdown("# ![logo](https://x/icon.png)")).toEqual([
+      {
+        kind: "heading",
+        level: 1,
+        runs: [{ src: "https://x/icon.png", alt: "logo" }],
       },
     ]);
   });
